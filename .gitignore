@@ -2,9 +2,8 @@ node_modules/
 dist/
 target/
 .idea/
-.runtime
+.forgedesk/
 .vscode/
 .DS_Store
 *.log
 apps/desktop/src-tauri/target/
-.runtime/

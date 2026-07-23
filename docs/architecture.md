@@ -5,7 +5,7 @@
 ForgeDesk 是一个面向研发工作流的桌面插件平台。
 
 - 平台层负责导航、插件激活、运行容器和共享状态。
-- 插件层承载具体业务能力，例如日志分析、JSON 工具、环境入口和排查记录。
+- 插件层承载具体业务能力，例如开发工具、工作笔记和管理面板。
 - Java 后端当前保持轻量，负责桌面端 API，并为后续持久化、本地集成和自动化能力预留承载点。
 
 ## 模块概览
@@ -20,10 +20,8 @@ ForgeDesk 是一个面向研发工作流的桌面插件平台。
   平台首页和插件总览卡片。
 - `src/plugins/index.tsx`
   内置插件注册表，也是当前插件激活入口。
-- `src/plugins/log-inspector.tsx`
-  第一个可运行的插件示例。
 - `src/api.ts`
-  前端 API 客户端，负责健康检查和平台初始化数据请求。
+  前端 API 客户端，负责健康检查、认证和服务端同步请求。
 - `src/types.ts`
   平台和插件共享的类型契约，例如 `PluginDefinition` 和 `PluginContext`。
 
@@ -33,10 +31,10 @@ ForgeDesk 是一个面向研发工作流的桌面插件平台。
 
 - `app.forgedesk.ForgeDeskApplication`
   Spring Boot 启动入口。
-- `app.forgedesk.api.HealthController`
+- `app.forgedesk.interfaces.rest.health.HealthController`
   运行时健康检查接口。
-- `app.forgedesk.api.WelcomeController`
-  为前端平台壳提供轻量初始化数据。
+- `app.forgedesk.application`、`domain`、`infrastructure`、`interfaces`
+  后端按 DDD 分层实现，具体边界见 `docs/backend-ddd.md`。
 - `app.forgedesk.config.CorsConfig`
   本地开发阶段的跨域配置。
 
@@ -61,7 +59,7 @@ flowchart LR
     DesktopShell --> ApiClient[前端 API 客户端]
     ApiClient --> Backend[Spring Boot 后端]
     Backend --> Controllers[控制器接口层]
-    DesktopShell --> RuntimeFiles[.runtime PID 与日志]
+    DesktopShell --> RuntimeFiles[.forgedesk/runtime PID 与日志]
     Scripts[启动停止脚本] --> RuntimeFiles
     Scripts --> DesktopShell
     Scripts --> Backend

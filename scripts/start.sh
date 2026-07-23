@@ -112,6 +112,9 @@ wait_for_backend() {
     if curl --fail --silent "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
       return 0
     fi
+    if [[ -n "${BACKEND_PID:-}" ]] && ! pid_is_running "$BACKEND_PID"; then
+      return 1
+    fi
     sleep 0.25
   done
   return 1

@@ -1,5 +1,6 @@
 server:
   port: 8088
+  address: ${FORGEDESK_BIND_ADDRESS:127.0.0.1}
 
 debug: false
 
@@ -7,7 +8,12 @@ spring:
   application:
     name: forgedesk-backend
 
+forgedesk:
+  time-zone: ${FORGEDESK_TIME_ZONE:Asia/Shanghai}
+
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level trace=%X{traceId:-} %logger{36} - %msg%n"
   level:
     root: INFO
     org.springframework: INFO

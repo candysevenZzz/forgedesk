@@ -84,8 +84,10 @@ npm run dev:desktop
 ## 后端接口
 
 - `GET /api/health`：健康检查
-- `GET /api/welcome`：欢迎页数据
 - `POST /api/work-notes/sync`：工作笔记归档合并
+- `POST /api/auth/register`、`POST /api/auth/login`：服务账号注册与登录
+- `GET /api/admin/system`：管理员资源监控与用户目录存储汇总
+- 聊天接口：见 [加密聊天接口说明](./docs/chat-api.md)
 
 ## 运行模式与笔记同步
 
@@ -93,10 +95,12 @@ npm run dev:desktop
 - 切换到“服务”模式时会先请求健康检查；连接失败会保留本地模式。
 - 工作笔记始终先保存到本机应用数据目录。服务模式下才会自动合并笔记，也可以手动触发同步。
 - 合并按单条笔记的 `updatedAt` 处理；删除会保留墓碑记录，防止旧设备在下一次同步时恢复已删除笔记。
-- 同步请求失败不会覆盖或删除本地内容。服务端归档默认写入用户目录的 `.forgedesk/work-notes-remote.json`，不进入 Git。
+- 同步请求失败不会覆盖或删除本地内容。服务端归档按用户写入 `~/.forgedesk/server/users/<user-id>/work-notes.json`，不进入 Git。
 
 ## 文档导航
 
 - [架构说明](./docs/architecture.md)
 - [启动与部署](./docs/run-and-deploy.md)
+- [加密聊天架构](./docs/chat-architecture.md)
+- [加密聊天接口](./docs/chat-api.md)
 - [仓库规则](./AGENTS.md)

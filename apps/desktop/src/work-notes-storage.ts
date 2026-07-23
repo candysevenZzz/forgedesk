@@ -40,7 +40,9 @@ function isTauriRuntime() {
 
 function parseArchive(serialized: string): WorkNotesArchive {
   const parsed: unknown = JSON.parse(serialized);
-  if (Array.isArray(parsed)) return { version: 2, days: { [todayWorkNotesDate()]: parsed as WorkNote[] }, tombstones: {} };
+  if (Array.isArray(parsed)) {
+    return { version: 2, days: { [todayWorkNotesDate()]: parsed as WorkNote[] }, tombstones: {} };
+  }
   if (!parsed || typeof parsed !== "object" || !("days" in parsed) || !parsed.days || typeof parsed.days !== "object") {
     return { version: 2, days: {}, tombstones: {} };
   }
@@ -49,9 +51,12 @@ function parseArchive(serialized: string): WorkNotesArchive {
       .filter(([date, notes]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Array.isArray(notes))
       .map(([date, notes]) => [date, notes as WorkNote[]]),
   );
-  const tombstones = "tombstones" in parsed && parsed.tombstones && typeof parsed.tombstones === "object"
-    ? Object.fromEntries(Object.entries(parsed.tombstones as Record<string, unknown>).filter(([, value]) => typeof value === "string")) as Record<string, string>
-    : {};
+  const tombstones =
+    "tombstones" in parsed && parsed.tombstones && typeof parsed.tombstones === "object"
+      ? (Object.fromEntries(
+          Object.entries(parsed.tombstones as Record<string, unknown>).filter(([, value]) => typeof value === "string"),
+        ) as Record<string, string>)
+      : {};
   return { version: 2, days, tombstones };
 }
 

@@ -13,7 +13,7 @@ export async function loadRuntimeSettings(): Promise<RuntimeSettings> {
   try {
     const serialized = isTauriRuntime()
       ? await invoke<string>("load_runtime_settings")
-      : window.localStorage.getItem(browserStorageKey) ?? "{}";
+      : (window.localStorage.getItem(browserStorageKey) ?? "{}");
     const parsed = JSON.parse(serialized) as Partial<RuntimeSettings>;
     return { mode: parsed.mode === "connected" ? "connected" : "local" };
   } catch {

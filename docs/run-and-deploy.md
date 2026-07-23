@@ -65,7 +65,7 @@ npm run check
 后台启动后会写入以下运行时文件：
 
 ```text
-.runtime/
+.forgedesk/runtime/
 ├── backend.pid
 ├── web.pid
 ├── backend.log
@@ -82,7 +82,7 @@ npm run check
 
 1. 检查必要命令是否存在。
 2. 确认 `8088` 和 `1420` 端口未被占用。
-3. 创建 `.runtime/` 目录。
+3. 创建 `.forgedesk/runtime/` 目录。
 4. 后台启动 Spring Boot 后端。
 5. 后台启动 Vite 前端。
 6. 写入 PID 文件和日志文件。
@@ -91,7 +91,7 @@ npm run check
 
 停止脚本会做这些事：
 
-1. 从 `.runtime/` 读取 PID 文件。
+1. 从 `.forgedesk/runtime/` 读取 PID 文件。
 2. 优先尝试优雅关闭。
 3. 如果进程未退出，则执行强制结束。
 4. 清理陈旧 PID 文件。
@@ -164,8 +164,8 @@ lsof -nP -iTCP:1420 -sTCP:LISTEN
 
 ### 日志看起来是空的
 
-- 检查 `.runtime/backend.log`
-- 检查 `.runtime/web.log`
+- 检查 `.forgedesk/runtime/backend.log`
+- 检查 `.forgedesk/runtime/web.log`
 - 如果服务是从别的终端手动启动的，这里的日志不会反映那次启动
 
 ### Tauri 无法启动

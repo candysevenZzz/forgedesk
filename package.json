@@ -18,6 +18,19 @@
     "build:web": "npm --workspace apps/desktop run build",
     "backend:dev": "bash ./scripts/maven.sh -f apps/backend/pom.xml spring-boot:run",
     "backend:test": "bash ./scripts/maven.sh -f apps/backend/pom.xml test",
-    "check": "npm --workspace apps/desktop run check && npm run backend:test"
+    "lint:web": "eslint apps/desktop/src",
+    "lint:web:fix": "eslint apps/desktop/src --fix",
+    "format:web": "prettier --write \"apps/desktop/src/**/*.{ts,tsx,css}\" \"apps/desktop/index.html\" \"*.{json,md}\"",
+    "format:web:check": "prettier --check \"apps/desktop/src/**/*.{ts,tsx,css}\" \"apps/desktop/index.html\" \"*.{json,md}\"",
+    "format:backend": "bash ./scripts/maven.sh -f apps/backend/pom.xml spotless:apply",
+    "format:backend:check": "bash ./scripts/maven.sh -f apps/backend/pom.xml spotless:check",
+    "format": "npm run format:web && npm run format:backend",
+    "format:check": "npm run format:web:check && npm run format:backend:check",
+    "check": "npm run format:check && npm run lint:web && npm --workspace apps/desktop run check && npm run backend:test"
+  },
+  "devDependencies": {
+    "eslint": "9.39.4",
+    "prettier": "3.9.6",
+    "typescript-eslint": "8.57.0"
   }
 }

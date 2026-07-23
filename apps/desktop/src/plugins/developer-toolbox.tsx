@@ -18,29 +18,44 @@ import {
   Timer,
   Pause,
   Play,
+  Plus,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
-import { translateText, type TranslationCredentials, type TranslationProvider } from "../api";
+import {
+  getTranslationConfiguration,
+  saveTranslationConfiguration,
+  translateText,
+  type TranslationConfigurationInput,
+  type TranslationProvider,
+} from "../api";
 import type { PluginContext, PluginDefinition } from "../types";
 
 type ToolId = "json" | "timestamp" | "timer" | "jwt" | "diff" | "text" | "translate";
 type JsonMode = "pretty" | "compact";
 type TextOutputMode = "lines" | "csv" | "sql";
 
-const tools: Array<{ id: ToolId; label: string; description: string; icon: typeof Braces; requiresService?: boolean }> = [
-  { id: "json", label: "JSON 格式化", description: "格式化、压缩并校验 JSON 内容", icon: Braces },
-  { id: "timestamp", label: "时间戳转换", description: "秒、毫秒与日期格式互转", icon: Clock3 },
-  { id: "timer", label: "定时器", description: "计时、目标倒计时与提前提醒", icon: Timer },
-  { id: "jwt", label: "JWT 解析", description: "读取 Header 与 Payload，不上传 Token", icon: KeyRound },
-  { id: "diff", label: "文本对比", description: "比较文本或 JSON，并可排序两侧内容", icon: Diff },
-  { id: "text", label: "文本与 ID", description: "拆分、去重并组合一组标识符", icon: Rows3 },
-  { id: "translate", label: "文本翻译", description: "通过已连接服务调用第三方翻译厂商", icon: Languages, requiresService: true },
-];
+const tools: Array<{ id: ToolId; label: string; description: string; icon: typeof Braces; requiresService?: boolean }> =
+  [
+    { id: "json", label: "JSON 格式化", description: "格式化、压缩并校验 JSON 内容", icon: Braces },
+    { id: "timestamp", label: "时间戳转换", description: "秒、毫秒与日期格式互转", icon: Clock3 },
+    { id: "timer", label: "定时器", description: "计时、目标倒计时与提前提醒", icon: Timer },
+    { id: "jwt", label: "JWT 解析", description: "读取 Header 与 Payload，不上传 Token", icon: KeyRound },
+    { id: "diff", label: "文本对比", description: "比较文本或 JSON，并可排序两侧内容", icon: Diff },
+    { id: "text", label: "文本与 ID", description: "拆分、去重并组合一组标识符", icon: Rows3 },
+    {
+      id: "translate",
+      label: "文本翻译",
+      description: "通过已连接服务调用第三方翻译厂商",
+      icon: Languages,
+      requiresService: true,
+    },
+  ];
 
 const translationProviders: Array<{
   id: TranslationProvider;
   label: string;
-  credentialFields: Array<{ key: keyof TranslationCredentials; label: string; placeholder: string }>;
+  credentialFields: Array<{ key: keyof TranslationConfigurationInput; label: string; placeholder: string }>;
 }> = [
   {
     id: "baidu",
@@ -61,9 +76,7 @@ const translationProviders: Array<{
   {
     id: "google",
     label: "Google Cloud",
-    credentialFields: [
-      { key: "appKey", label: "API Key", placeholder: "Google Cloud Translation API Key" },
-    ],
+    credentialFields: [{ key: "appKey", label: "API Key", placeholder: "Google Cloud Translation API Key" }],
   },
   {
     id: "alibaba",
@@ -75,7 +88,7 @@ const translationProviders: Array<{
   },
 ];
 
-const emptyCredentials: TranslationCredentials = { appId: "", appKey: "", appSecret: "" };
+const emptyTranslationConfiguration: TranslationConfigurationInput = { appId: "", appKey: "", appSecret: "" };
 
 const timeZones = [
   { id: "Asia/Shanghai", label: "东八区（上海）" },
@@ -147,15 +160,28 @@ function timeZoneOffset(timeZone: string, timestamp: number) {
     hourCycle: "h23",
   }).formatToParts(new Date(timestamp));
   const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((item) => item.type === type)?.value ?? 0);
-  return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second")) - timestamp;
+  return (
+    Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second")) - timestamp
+  );
 }
 
 function parseDateInTimeZone(value: string, timeZone: string) {
   const match = value.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (!match) return Date.parse(value);
-  const utcGuess = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4] ?? 0), Number(match[5] ?? 0), Number(match[6] ?? 0));
+  if (!match) {
+    return Date.parse(value);
+  }
+  const utcGuess = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4] ?? 0),
+    Number(match[5] ?? 0),
+    Number(match[6] ?? 0),
+  );
   let timestamp = utcGuess;
-  for (let attempt = 0; attempt < 2; attempt += 1) timestamp = utcGuess - timeZoneOffset(timeZone, timestamp);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    timestamp = utcGuess - timeZoneOffset(timeZone, timestamp);
+  }
   return timestamp;
 }
 
@@ -204,8 +230,12 @@ function toLines(value: string) {
 }
 
 function normalizeCompareValue(value: string, mode: "text" | "json") {
-  if (mode === "text") return { value, error: "" };
-  if (!value.trim()) return { value: "", error: "" };
+  if (mode === "text") {
+    return { value, error: "" };
+  }
+  if (!value.trim()) {
+    return { value: "", error: "" };
+  }
   try {
     return { value: JSON.stringify(JSON.parse(value), null, 2), error: "" };
   } catch (error) {
@@ -225,16 +255,24 @@ function compareLines(leftSource: string, rightSource: string): DiffRow[] {
       right: right[index],
       leftNumber: left[index] === undefined ? undefined : index + 1,
       rightNumber: right[index] === undefined ? undefined : index + 1,
-      state: left[index] === right[index] ? "same" : left[index] === undefined ? "added" : right[index] === undefined ? "removed" : "changed",
+      state:
+        left[index] === right[index]
+          ? "same"
+          : left[index] === undefined
+            ? "added"
+            : right[index] === undefined
+              ? "removed"
+              : "changed",
     }));
   }
 
   const matrix = Array.from({ length: left.length + 1 }, () => new Uint16Array(right.length + 1));
   for (let leftIndex = left.length - 1; leftIndex >= 0; leftIndex -= 1) {
     for (let rightIndex = right.length - 1; rightIndex >= 0; rightIndex -= 1) {
-      matrix[leftIndex][rightIndex] = left[leftIndex] === right[rightIndex]
-        ? matrix[leftIndex + 1][rightIndex + 1] + 1
-        : Math.max(matrix[leftIndex + 1][rightIndex], matrix[leftIndex][rightIndex + 1]);
+      matrix[leftIndex][rightIndex] =
+        left[leftIndex] === right[rightIndex]
+          ? matrix[leftIndex + 1][rightIndex + 1] + 1
+          : Math.max(matrix[leftIndex + 1][rightIndex], matrix[leftIndex][rightIndex + 1]);
     }
   }
 
@@ -243,10 +281,19 @@ function compareLines(leftSource: string, rightSource: string): DiffRow[] {
   let rightIndex = 0;
   while (leftIndex < left.length || rightIndex < right.length) {
     if (leftIndex < left.length && rightIndex < right.length && left[leftIndex] === right[rightIndex]) {
-      rows.push({ left: left[leftIndex], right: right[rightIndex], leftNumber: leftIndex + 1, rightNumber: rightIndex + 1, state: "same" });
+      rows.push({
+        left: left[leftIndex],
+        right: right[rightIndex],
+        leftNumber: leftIndex + 1,
+        rightNumber: rightIndex + 1,
+        state: "same",
+      });
       leftIndex += 1;
       rightIndex += 1;
-    } else if (rightIndex === right.length || (leftIndex < left.length && matrix[leftIndex + 1][rightIndex] >= matrix[leftIndex][rightIndex + 1])) {
+    } else if (
+      rightIndex === right.length ||
+      (leftIndex < left.length && matrix[leftIndex + 1][rightIndex] >= matrix[leftIndex][rightIndex + 1])
+    ) {
       rows.push({ left: left[leftIndex], leftNumber: leftIndex + 1, state: "removed" });
       leftIndex += 1;
     } else {
@@ -271,7 +318,12 @@ function compareLines(leftSource: string, rightSource: string): DiffRow[] {
     const added = block.filter((row) => row.state === "added");
     const paired = Math.min(removed.length, added.length);
     for (let pair = 0; pair < paired; pair += 1) {
-      merged.push({ ...removed[pair], right: added[pair].right, rightNumber: added[pair].rightNumber, state: "changed" });
+      merged.push({
+        ...removed[pair],
+        right: added[pair].right,
+        rightNumber: added[pair].rightNumber,
+        state: "changed",
+      });
     }
     merged.push(...removed.slice(paired), ...added.slice(paired));
   }
@@ -283,11 +335,15 @@ function splitItems(value: string, deduplicate: boolean) {
     .split(/[，,;；\s]+/)
     .map((item) => item.trim())
     .filter(Boolean);
-  if (!deduplicate) return items;
+  if (!deduplicate) {
+    return items;
+  }
 
   const seen = new Set<string>();
   return items.filter((item) => {
-    if (seen.has(item)) return false;
+    if (seen.has(item)) {
+      return false;
+    }
     seen.add(item);
     return true;
   });
@@ -297,7 +353,9 @@ function CopyButton(props: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    if (!props.value) return;
+    if (!props.value) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(props.value);
       setCopied(true);
@@ -310,7 +368,7 @@ function CopyButton(props: { value: string; label?: string }) {
   return (
     <button className="tool-copy-button" type="button" onClick={() => void copy()} disabled={!props.value}>
       {copied ? <Check size={15} aria-hidden="true" /> : <Clipboard size={15} aria-hidden="true" />}
-      {copied ? "已复制" : props.label ?? "复制"}
+      {copied ? "已复制" : (props.label ?? "复制")}
     </button>
   );
 }
@@ -332,8 +390,12 @@ function JsonTool() {
       toolbar={
         <div className="tool-workspace-actions">
           <div className="segmented-control" aria-label="JSON 输出格式">
-            <button className={mode === "pretty" ? "selected" : ""} type="button" onClick={() => setMode("pretty")}>格式化</button>
-            <button className={mode === "compact" ? "selected" : ""} type="button" onClick={() => setMode("compact")}>压缩</button>
+            <button className={mode === "pretty" ? "selected" : ""} type="button" onClick={() => setMode("pretty")}>
+              格式化
+            </button>
+            <button className={mode === "compact" ? "selected" : ""} type="button" onClick={() => setMode("compact")}>
+              压缩
+            </button>
           </div>
           <CopyButton value={result.output} />
         </div>
@@ -351,21 +413,57 @@ function TimestampTool() {
   return (
     <section className="tool-workspace">
       <div className="tool-workspace-head">
-        <div><h2>时间戳转换</h2><p>自动识别秒、毫秒与常见日期格式。</p></div>
-        <div className="timestamp-actions"><label className="timestamp-zone"><span>时区</span><select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>{timeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}</select></label><button className="tool-action-button" type="button" onClick={() => setInput(String(Date.now()))}><Clock3 size={16} aria-hidden="true" />当前时间</button></div>
+        <div>
+          <h2>时间戳转换</h2>
+          <p>自动识别秒、毫秒与常见日期格式。</p>
+        </div>
+        <div className="timestamp-actions">
+          <label className="timestamp-zone">
+            <span>时区</span>
+            <select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
+              {timeZones.map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="tool-action-button" type="button" onClick={() => setInput(String(Date.now()))}>
+            <Clock3 size={16} aria-hidden="true" />
+            当前时间
+          </button>
+        </div>
       </div>
-      <label className="tool-field"><span>Unix 时间戳或日期</span><input className="text-field" value={input} onChange={(event) => setInput(event.target.value)} placeholder="1721612419000 或 2026-07-22 09:30:00" /></label>
-      {result.error ? <p className="tool-error">{result.error}</p> : <div className="timestamp-grid">
-        <ResultTile label="毫秒时间戳" value={result.timestamp} />
-        <ResultTile label="ISO 8601 (UTC)" value={result.iso} />
-        <ResultTile label={`${zoneLabel}时间`} value={result.local} />
-      </div>}
+      <label className="tool-field">
+        <span>Unix 时间戳或日期</span>
+        <input
+          className="text-field"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="1721612419000 或 2026-07-22 09:30:00"
+        />
+      </label>
+      {result.error ? (
+        <p className="tool-error">{result.error}</p>
+      ) : (
+        <div className="timestamp-grid">
+          <ResultTile label="毫秒时间戳" value={result.timestamp} />
+          <ResultTile label="ISO 8601 (UTC)" value={result.iso} />
+          <ResultTile label={`${zoneLabel}时间`} value={result.local} />
+        </div>
+      )}
     </section>
   );
 }
 
 function ResultTile(props: { label: string; value: string }) {
-  return <section className="result-tile"><span>{props.label}</span><code>{props.value || "--"}</code><CopyButton value={props.value} /></section>;
+  return (
+    <section className="result-tile">
+      <span>{props.label}</span>
+      <code>{props.value || "--"}</code>
+      <CopyButton value={props.value} />
+    </section>
+  );
 }
 
 function formatDuration(milliseconds: number) {
@@ -383,91 +481,377 @@ function toDateTimeLocal(timestamp: number) {
   return localDate.toISOString().slice(0, 16);
 }
 
+type TimerKind = "stopwatch" | "countdown";
+type CountdownMode = "duration" | "target";
+
+type TimerTask = {
+  id: string;
+  kind: TimerKind;
+  name: string;
+  startedAt: number | null;
+  elapsedMs: number;
+  remainingMs: number;
+  endsAt: number | null;
+  countdownMode: CountdownMode;
+  targetDate: string;
+  reminderMinutes: number;
+  reminderTriggered: boolean;
+  notice: string;
+};
+
+function createTimerTask(kind: TimerKind): TimerTask {
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  return {
+    id,
+    kind,
+    name: kind === "stopwatch" ? "新计时任务" : "新倒计时任务",
+    startedAt: null,
+    elapsedMs: 0,
+    remainingMs: 5 * 60 * 1000,
+    endsAt: null,
+    countdownMode: "duration",
+    targetDate: toDateTimeLocal(Date.now() + 5 * 60 * 1000),
+    reminderMinutes: 1,
+    reminderTriggered: false,
+    notice: "",
+  };
+}
+
+function timerTaskValue(task: TimerTask, now: number) {
+  if (task.kind === "stopwatch") {
+    return task.elapsedMs + (task.startedAt ? now - task.startedAt : 0);
+  }
+  if (task.endsAt) {
+    return Math.max(0, task.endsAt - now);
+  }
+  if (task.countdownMode === "target") {
+    const target = new Date(task.targetDate).getTime();
+    return Number.isFinite(target) ? Math.max(0, target - now) : 0;
+  }
+  return task.remainingMs;
+}
+
+function timerTaskStatus(task: TimerTask, now: number) {
+  const value = timerTaskValue(task, now);
+  if (task.startedAt || task.endsAt) {
+    return "进行中";
+  }
+  if (task.kind === "countdown" && value === 0) {
+    return "已结束";
+  }
+  return "已暂停";
+}
+
 function TimerTool() {
   const [now, setNow] = useState(Date.now());
-  const [stopwatchStartedAt, setStopwatchStartedAt] = useState<number | null>(null);
-  const [stopwatchSaved, setStopwatchSaved] = useState(0);
-  const [countdownRemaining, setCountdownRemaining] = useState(5 * 60 * 1000);
-  const [countdownEndsAt, setCountdownEndsAt] = useState<number | null>(null);
-  const [countdownMode, setCountdownMode] = useState<"duration" | "target">("duration");
-  const [targetDate, setTargetDate] = useState(() => toDateTimeLocal(Date.now() + 5 * 60 * 1000));
-  const [reminderMinutes, setReminderMinutes] = useState(1);
-  const [reminderTriggered, setReminderTriggered] = useState(false);
-  const [countdownNotice, setCountdownNotice] = useState("");
-  const stopwatchRunning = stopwatchStartedAt !== null;
-  const countdownRunning = countdownEndsAt !== null;
-  const stopwatchValue = stopwatchSaved + (stopwatchStartedAt ? now - stopwatchStartedAt : 0);
-  const targetTimestamp = new Date(targetDate).getTime();
-  const configuredTargetRemaining = Number.isFinite(targetTimestamp) ? Math.max(0, targetTimestamp - now) : 0;
-  const countdownValue = countdownEndsAt ? Math.max(0, countdownEndsAt - now) : countdownMode === "target" ? configuredTargetRemaining : countdownRemaining;
+  const [tasks, setTasks] = useState<TimerTask[]>(() => [createTimerTask("stopwatch"), createTimerTask("countdown")]);
+  const [selectedTaskId, setSelectedTaskId] = useState(() => tasks[0]?.id ?? "");
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  const hasRunningTask = tasks.some((task) => task.startedAt !== null || task.endsAt !== null);
 
   useEffect(() => {
-    if (!stopwatchRunning && !countdownRunning) return undefined;
+    if (!hasRunningTask) {
+      return undefined;
+    }
     const interval = window.setInterval(() => setNow(Date.now()), 50);
     return () => window.clearInterval(interval);
-  }, [countdownRunning, stopwatchRunning]);
+  }, [hasRunningTask]);
 
   useEffect(() => {
-    if (!countdownEndsAt) return;
-    if (countdownValue === 0) {
-      setCountdownEndsAt(null);
-      setCountdownRemaining(0);
-      setCountdownNotice("倒计时已结束");
-      if ("Notification" in window && Notification.permission === "granted") new Notification("ForgeDesk 倒计时", { body: "倒计时已结束" });
+    if (!hasRunningTask) {
       return;
     }
-    if (!reminderTriggered && reminderMinutes > 0 && countdownValue <= reminderMinutes * 60_000) {
-      const message = `提醒：距离结束还有 ${formatDuration(countdownValue)}`;
-      setReminderTriggered(true);
-      setCountdownNotice(message);
-      if ("Notification" in window && Notification.permission === "granted") new Notification("ForgeDesk 倒计时", { body: message });
-    }
-  }, [countdownEndsAt, countdownValue, reminderMinutes, reminderTriggered]);
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.kind !== "countdown" || !task.endsAt) {
+          return task;
+        }
+        const value = timerTaskValue(task, now);
+        if (value === 0) {
+          return { ...task, endsAt: null, remainingMs: 0, notice: "倒计时已结束" };
+        }
+        if (!task.reminderTriggered && task.reminderMinutes > 0 && value <= task.reminderMinutes * 60_000) {
+          return { ...task, reminderTriggered: true, notice: `提醒：距离结束还有 ${formatDuration(value)}` };
+        }
+        return task;
+      }),
+    );
+  }, [hasRunningTask, now]);
 
-  function updateCountdown(part: "minutes" | "seconds", value: string) {
+  function updateTask(id: string, changes: Partial<TimerTask>) {
+    setTasks((current) => current.map((task) => (task.id === id ? { ...task, ...changes } : task)));
+  }
+
+  function addTask(kind: TimerKind) {
+    const task = createTimerTask(kind);
+    setTasks((current) => [...current, task]);
+    setSelectedTaskId(task.id);
+  }
+
+  function removeTask(id: string) {
+    const next = tasks.filter((task) => task.id !== id);
+    setTasks(next);
+    if (selectedTaskId === id) {
+      setSelectedTaskId(next[0]?.id ?? "");
+    }
+  }
+
+  function toggleTask(task: TimerTask) {
+    const value = timerTaskValue(task, now);
+    if (task.kind === "stopwatch") {
+      updateTask(task.id, task.startedAt ? { elapsedMs: value, startedAt: null } : { startedAt: Date.now() });
+      return;
+    }
+    if (task.endsAt) {
+      updateTask(task.id, task.countdownMode === "duration" ? { remainingMs: value, endsAt: null } : { endsAt: null });
+      return;
+    }
+    const target = new Date(task.targetDate).getTime();
+    if (task.countdownMode === "target" && (!Number.isFinite(target) || target <= Date.now())) {
+      updateTask(task.id, { notice: "目标时间需要晚于当前时间" });
+      return;
+    }
+    if (value > 0) {
+      updateTask(task.id, {
+        endsAt: task.countdownMode === "target" ? target : Date.now() + value,
+        notice: "",
+        reminderTriggered: false,
+      });
+      if ("Notification" in window && Notification.permission === "default") {
+        void Notification.requestPermission();
+      }
+    }
+  }
+
+  function updateCountdownDuration(task: TimerTask, part: "minutes" | "seconds", value: string) {
     const numeric = Math.max(0, Number(value) || 0);
-    const next = part === "minutes"
-      ? numeric * 60_000 + (Math.floor(countdownRemaining / 1000) % 60) * 1000
-      : Math.floor(countdownRemaining / 60_000) * 60_000 + Math.min(59, numeric) * 1000;
-    setCountdownEndsAt(null);
-    setCountdownRemaining(next);
-    setCountdownNotice("");
-    setReminderTriggered(false);
+    const next =
+      part === "minutes"
+        ? numeric * 60_000 + (Math.floor(task.remainingMs / 1000) % 60) * 1000
+        : Math.floor(task.remainingMs / 60_000) * 60_000 + Math.min(59, numeric) * 1000;
+    updateTask(task.id, { remainingMs: next, endsAt: null, notice: "", reminderTriggered: false });
   }
 
-  function toggleStopwatch() {
-    if (stopwatchRunning) {
-      setStopwatchSaved(stopwatchValue);
-      setStopwatchStartedAt(null);
-      return;
-    }
-    setStopwatchStartedAt(Date.now());
+  if (!selectedTask) {
+    return (
+      <section className="timer-workspace">
+        <div className="timer-toolbar">
+          <div>
+            <h2>定时器</h2>
+            <p>为需要跟踪的工作创建一个任务。</p>
+          </div>
+          <button className="timer-primary" type="button" onClick={() => addTask("stopwatch")}>
+            <Plus size={16} aria-hidden="true" />
+            新建任务
+          </button>
+        </div>
+      </section>
+    );
   }
 
-  function toggleCountdown() {
-    if (countdownRunning) {
-      if (countdownMode === "duration") setCountdownRemaining(countdownValue);
-      setCountdownEndsAt(null);
-      return;
-    }
-    if (countdownMode === "target" && (!Number.isFinite(targetTimestamp) || targetTimestamp <= Date.now())) {
-      setCountdownNotice("目标时间需要晚于当前时间");
-      return;
-    }
-    if (countdownValue > 0) {
-      setCountdownEndsAt(countdownMode === "target" ? targetTimestamp : Date.now() + countdownValue);
-      setCountdownNotice("");
-      setReminderTriggered(false);
-      if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
-    }
-  }
+  const selectedValue = timerTaskValue(selectedTask, now);
+  const selectedRunning = selectedTask.startedAt !== null || selectedTask.endsAt !== null;
 
   return (
     <section className="timer-workspace">
-      <div><h2>定时器</h2><p>计时器与倒计时都基于真实时间推进，暂停后可继续。</p></div>
-      <div className="timer-grid">
-        <section className="timer-panel"><div className="timer-panel-head"><span>计时器</span><strong>{stopwatchRunning ? "进行中" : "已暂停"}</strong></div><output>{formatDuration(stopwatchValue)}</output><div className="timer-actions"><button className="timer-primary" type="button" onClick={toggleStopwatch}>{stopwatchRunning ? <><Pause size={16} aria-hidden="true" />暂停</> : <><Play size={16} aria-hidden="true" />开始</>}</button><button className="tool-action-button" type="button" onClick={() => { setStopwatchStartedAt(null); setStopwatchSaved(0); }}><RotateCcw size={15} aria-hidden="true" />重置</button></div></section>
-        <section className="timer-panel"><div className="timer-panel-head"><span>倒计时</span><strong>{countdownRunning ? "进行中" : countdownValue === 0 ? "已结束" : "已暂停"}</strong></div><output>{formatDuration(countdownValue)}</output><div className="segmented-control timer-mode"><button className={countdownMode === "duration" ? "selected" : ""} type="button" onClick={() => { setCountdownEndsAt(null); setCountdownMode("duration"); }}>按时长</button><button className={countdownMode === "target" ? "selected" : ""} type="button" onClick={() => { setCountdownEndsAt(null); setCountdownMode("target"); }}>目标时间</button></div>{countdownMode === "duration" ? <div className="countdown-inputs"><label><span>分钟</span><input type="number" min="0" value={Math.floor(countdownRemaining / 60_000)} onChange={(event) => updateCountdown("minutes", event.target.value)} disabled={countdownRunning} /></label><label><span>秒</span><input type="number" min="0" max="59" value={Math.floor(countdownRemaining / 1000) % 60} onChange={(event) => updateCountdown("seconds", event.target.value)} disabled={countdownRunning} /></label></div> : <label className="countdown-target"><span>结束时间</span><input type="datetime-local" value={targetDate} onChange={(event) => { setTargetDate(event.target.value); setCountdownNotice(""); setReminderTriggered(false); }} disabled={countdownRunning} /></label>}<label className="countdown-reminder"><span>提前提醒</span><input type="number" min="0" value={reminderMinutes} onChange={(event) => { setReminderMinutes(Math.max(0, Number(event.target.value) || 0)); setReminderTriggered(false); }} /><em>分钟</em></label>{countdownNotice ? <p className="countdown-notice" role="status">{countdownNotice}</p> : null}<div className="timer-actions"><button className="timer-primary" type="button" onClick={toggleCountdown} disabled={!countdownRunning && countdownValue === 0}>{countdownRunning ? <><Pause size={16} aria-hidden="true" />{countdownMode === "target" ? "停止" : "暂停"}</> : <><Play size={16} aria-hidden="true" />开始</>}</button><button className="tool-action-button" type="button" onClick={() => { setCountdownEndsAt(null); setCountdownRemaining(5 * 60 * 1000); setTargetDate(toDateTimeLocal(Date.now() + 5 * 60 * 1000)); setCountdownNotice(""); setReminderTriggered(false); }}><RotateCcw size={15} aria-hidden="true" />重置</button></div></section>
+      <div className="timer-toolbar">
+        <div>
+          <h2>定时器</h2>
+          <p>每个任务独立计时、提醒与命名，全部在本机运行。</p>
+        </div>
+        <div className="timer-create-actions">
+          <button className="tool-action-button" type="button" onClick={() => addTask("stopwatch")}>
+            <Plus size={15} aria-hidden="true" />
+            计时器
+          </button>
+          <button className="timer-primary" type="button" onClick={() => addTask("countdown")}>
+            <Plus size={15} aria-hidden="true" />
+            倒计时
+          </button>
+        </div>
+      </div>
+      <div className="timer-layout">
+        <aside className="timer-task-list" aria-label="定时任务列表">
+          <div className="timer-list-head">
+            <span>任务</span>
+            <strong>{tasks.length}</strong>
+          </div>
+          {tasks.map((task) => (
+            <button
+              className={`timer-task-row ${task.id === selectedTask.id ? "active" : ""}`}
+              key={task.id}
+              type="button"
+              onClick={() => setSelectedTaskId(task.id)}
+            >
+              <span className={`timer-task-kind ${task.kind}`}>
+                <Timer size={15} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>{task.name || "未命名任务"}</strong>
+                <small>
+                  {task.kind === "stopwatch" ? "计时器" : "倒计时"} · {timerTaskStatus(task, now)}
+                </small>
+              </span>
+              <output>{formatDuration(timerTaskValue(task, now))}</output>
+            </button>
+          ))}
+        </aside>
+        <section className="timer-detail">
+          <div className="timer-detail-head">
+            <label>
+              <span>任务名称</span>
+              <input
+                value={selectedTask.name}
+                onChange={(event) => updateTask(selectedTask.id, { name: event.target.value })}
+                placeholder="为任务命名"
+              />
+            </label>
+            <button
+              className="timer-delete"
+              type="button"
+              onClick={() => removeTask(selectedTask.id)}
+              aria-label="删除当前任务"
+              title="删除当前任务"
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="timer-task-meta">
+            <span className={`timer-task-status ${selectedRunning ? "running" : ""}`}>
+              {timerTaskStatus(selectedTask, now)}
+            </span>
+            <span>
+              {selectedTask.kind === "stopwatch"
+                ? "计时器"
+                : selectedTask.countdownMode === "target"
+                  ? "目标时间倒计时"
+                  : "按时长倒计时"}
+            </span>
+          </div>
+          <output className="timer-task-display">{formatDuration(selectedValue)}</output>
+          {selectedTask.kind === "countdown" ? (
+            <div className="timer-countdown-settings">
+              <div className="segmented-control timer-mode">
+                <button
+                  className={selectedTask.countdownMode === "duration" ? "selected" : ""}
+                  type="button"
+                  onClick={() => updateTask(selectedTask.id, { countdownMode: "duration", endsAt: null, notice: "" })}
+                >
+                  按时长
+                </button>
+                <button
+                  className={selectedTask.countdownMode === "target" ? "selected" : ""}
+                  type="button"
+                  onClick={() => updateTask(selectedTask.id, { countdownMode: "target", endsAt: null, notice: "" })}
+                >
+                  目标时间
+                </button>
+              </div>
+              {selectedTask.countdownMode === "duration" ? (
+                <div className="countdown-inputs">
+                  <label>
+                    <span>分钟</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={Math.floor(selectedTask.remainingMs / 60_000)}
+                      onChange={(event) => updateCountdownDuration(selectedTask, "minutes", event.target.value)}
+                      disabled={selectedRunning}
+                    />
+                  </label>
+                  <label>
+                    <span>秒</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={Math.floor(selectedTask.remainingMs / 1000) % 60}
+                      onChange={(event) => updateCountdownDuration(selectedTask, "seconds", event.target.value)}
+                      disabled={selectedRunning}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="countdown-target">
+                  <span>结束时间</span>
+                  <input
+                    type="datetime-local"
+                    value={selectedTask.targetDate}
+                    onChange={(event) =>
+                      updateTask(selectedTask.id, {
+                        targetDate: event.target.value,
+                        notice: "",
+                        reminderTriggered: false,
+                      })
+                    }
+                    disabled={selectedRunning}
+                  />
+                </label>
+              )}
+              <label className="countdown-reminder">
+                <span>提前提醒</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={selectedTask.reminderMinutes}
+                  onChange={(event) =>
+                    updateTask(selectedTask.id, {
+                      reminderMinutes: Math.max(0, Number(event.target.value) || 0),
+                      reminderTriggered: false,
+                    })
+                  }
+                />
+                <em>分钟</em>
+              </label>
+              {selectedTask.notice ? (
+                <p className="countdown-notice" role="status">
+                  {selectedTask.notice}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="timer-actions">
+            <button
+              className="timer-primary"
+              type="button"
+              onClick={() => toggleTask(selectedTask)}
+              disabled={selectedTask.kind === "countdown" && !selectedRunning && selectedValue === 0}
+            >
+              {selectedRunning ? (
+                <>
+                  <Pause size={16} aria-hidden="true" />
+                  {selectedTask.kind === "countdown" && selectedTask.countdownMode === "target" ? "停止" : "暂停"}
+                </>
+              ) : (
+                <>
+                  <Play size={16} aria-hidden="true" />
+                  开始
+                </>
+              )}
+            </button>
+            <button
+              className="tool-action-button"
+              type="button"
+              onClick={() =>
+                updateTask(
+                  selectedTask.id,
+                  selectedTask.kind === "stopwatch"
+                    ? { startedAt: null, elapsedMs: 0 }
+                    : {
+                        endsAt: null,
+                        remainingMs: 5 * 60 * 1000,
+                        targetDate: toDateTimeLocal(Date.now() + 5 * 60 * 1000),
+                        notice: "",
+                        reminderTriggered: false,
+                      },
+                )
+              }
+            >
+              <RotateCcw size={15} aria-hidden="true" />
+              重置
+            </button>
+          </div>
+        </section>
       </div>
     </section>
   );
@@ -477,19 +861,53 @@ function JwtTool() {
   const [input, setInput] = useState("");
   const result = useMemo(() => parseJwt(input), [input]);
   const claims = useMemo(() => {
-    if (!result.payload) return [] as Array<{ name: string; value: string }>;
+    if (!result.payload) {
+      return [] as Array<{ name: string; value: string }>;
+    }
     const payload = JSON.parse(result.payload) as Record<string, unknown>;
-    return ["iat", "nbf", "exp"].flatMap((name) => typeof payload[name] === "number" ? [{ name, value: formatDate(payload[name] as number * 1000) }] : []);
+    return ["iat", "nbf", "exp"].flatMap((name) =>
+      typeof payload[name] === "number" ? [{ name, value: formatDate((payload[name] as number) * 1000) }] : [],
+    );
   }, [result.payload]);
 
   return (
     <section className="tool-workspace">
-      <div className="tool-workspace-head"><div><h2>JWT 解析</h2><p>只解码 Header 与 Payload，不会验证签名或上传 Token。</p></div></div>
-      <label className="tool-field"><span>JWT</span><textarea className="log-editor tool-input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="粘贴 eyJ...，也支持 Bearer 前缀" spellCheck={false} /></label>
-      {result.error ? <p className="tool-error">{input ? result.error : "粘贴 Token 后将显示已解码内容"}</p> : <>
-        <div className="tool-editor-grid"><OutputPanel title="Header" value={result.header} /><OutputPanel title="Payload" value={result.payload} /></div>
-        {claims.length > 0 ? <div className="claim-list">{claims.map((claim) => <div key={claim.name}><strong>{claim.name}</strong><span>{claim.value}</span></div>)}</div> : null}
-      </>}
+      <div className="tool-workspace-head">
+        <div>
+          <h2>JWT 解析</h2>
+          <p>只解码 Header 与 Payload，不会验证签名或上传 Token。</p>
+        </div>
+      </div>
+      <label className="tool-field">
+        <span>JWT</span>
+        <textarea
+          className="log-editor tool-input"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="粘贴 eyJ...，也支持 Bearer 前缀"
+          spellCheck={false}
+        />
+      </label>
+      {result.error ? (
+        <p className="tool-error">{input ? result.error : "粘贴 Token 后将显示已解码内容"}</p>
+      ) : (
+        <>
+          <div className="tool-editor-grid">
+            <OutputPanel title="Header" value={result.header} />
+            <OutputPanel title="Payload" value={result.payload} />
+          </div>
+          {claims.length > 0 ? (
+            <div className="claim-list">
+              {claims.map((claim) => (
+                <div key={claim.name}>
+                  <strong>{claim.name}</strong>
+                  <span>{claim.value}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -500,55 +918,160 @@ function DiffTool() {
   const [mode, setMode] = useState<"text" | "json">("text");
   const left = useMemo(() => normalizeCompareValue(leftInput, mode), [leftInput, mode]);
   const right = useMemo(() => normalizeCompareValue(rightInput, mode), [rightInput, mode]);
-  const rows = useMemo(() => left.error || right.error ? [] : compareLines(left.value, right.value), [left.error, left.value, right.error, right.value]);
-  const summary = useMemo(() => rows.reduce((result, row) => ({ ...result, [row.state]: result[row.state] + 1 }), { same: 0, added: 0, removed: 0, changed: 0 }), [rows]);
+  const rows = useMemo(
+    () => (left.error || right.error ? [] : compareLines(left.value, right.value)),
+    [left.error, left.value, right.error, right.value],
+  );
+  const summary = useMemo(
+    () =>
+      rows.reduce((result, row) => ({ ...result, [row.state]: result[row.state] + 1 }), {
+        same: 0,
+        added: 0,
+        removed: 0,
+        changed: 0,
+      }),
+    [rows],
+  );
 
   function sortBoth() {
-    const sortLines = (value: string) => toLines(value)
-      .filter((line) => line.trim())
-      .sort((first, second) => first.localeCompare(second, "zh-CN", { numeric: true }))
-      .join("\n");
+    const sortLines = (value: string) =>
+      toLines(value)
+        .filter((line) => line.trim())
+        .sort((first, second) => first.localeCompare(second, "zh-CN", { numeric: true }))
+        .join("\n");
     setLeftInput(sortLines(leftInput));
     setRightInput(sortLines(rightInput));
   }
 
   function formatBoth() {
-    if (!left.error) setLeftInput(left.value);
-    if (!right.error) setRightInput(right.value);
+    if (!left.error) {
+      setLeftInput(left.value);
+    }
+    if (!right.error) {
+      setRightInput(right.value);
+    }
   }
 
   return (
     <section className="compare-workspace">
       <div className="compare-toolbar">
-        <div><h2>文本对比</h2><p>逐行比较两份文本；JSON 模式会先规范化结构。</p></div>
+        <div>
+          <h2>文本对比</h2>
+          <p>逐行比较两份文本；JSON 模式会先规范化结构。</p>
+        </div>
         <div className="compare-actions">
-          <label className="compare-mode"><span>模式</span><select value={mode} onChange={(event) => setMode(event.target.value as "text" | "json")}><option value="text">文本</option><option value="json">JSON</option></select></label>
-          <button className="tool-action-button" type="button" onClick={formatBoth} disabled={mode !== "json" || Boolean(left.error || right.error)}><Braces size={15} aria-hidden="true" />格式化</button>
-          <button className="tool-action-button" type="button" onClick={sortBoth} disabled={mode !== "text"}><ListOrdered size={15} aria-hidden="true" />排序两侧</button>
-          <button className="tool-action-button" type="button" onClick={() => { setLeftInput(rightInput); setRightInput(leftInput); }}><ArrowLeftRight size={15} aria-hidden="true" />互换</button>
-          <button className="tool-action-button" type="button" onClick={() => { setLeftInput(""); setRightInput(""); }}><Eraser size={15} aria-hidden="true" />清空</button>
+          <label className="compare-mode">
+            <span>模式</span>
+            <select value={mode} onChange={(event) => setMode(event.target.value as "text" | "json")}>
+              <option value="text">文本</option>
+              <option value="json">JSON</option>
+            </select>
+          </label>
+          <button
+            className="tool-action-button"
+            type="button"
+            onClick={formatBoth}
+            disabled={mode !== "json" || Boolean(left.error || right.error)}
+          >
+            <Braces size={15} aria-hidden="true" />
+            格式化
+          </button>
+          <button className="tool-action-button" type="button" onClick={sortBoth} disabled={mode !== "text"}>
+            <ListOrdered size={15} aria-hidden="true" />
+            排序两侧
+          </button>
+          <button
+            className="tool-action-button"
+            type="button"
+            onClick={() => {
+              setLeftInput(rightInput);
+              setRightInput(leftInput);
+            }}
+          >
+            <ArrowLeftRight size={15} aria-hidden="true" />
+            互换
+          </button>
+          <button
+            className="tool-action-button"
+            type="button"
+            onClick={() => {
+              setLeftInput("");
+              setRightInput("");
+            }}
+          >
+            <Eraser size={15} aria-hidden="true" />
+            清空
+          </button>
         </div>
       </div>
-      {left.error || right.error ? <div className="compare-errors"><p>{left.error ? `左侧：${left.error}` : ""}</p><p>{right.error ? `右侧：${right.error}` : ""}</p></div> : null}
+      {left.error || right.error ? (
+        <div className="compare-errors">
+          <p>{left.error ? `左侧：${left.error}` : ""}</p>
+          <p>{right.error ? `右侧：${right.error}` : ""}</p>
+        </div>
+      ) : null}
       <div className="compare-input-grid">
-        <label className="compare-editor"><span>左侧文本</span><textarea value={leftInput} onChange={(event) => setLeftInput(event.target.value)} placeholder={mode === "json" ? "粘贴 JSON" : "粘贴第一份文本"} spellCheck={false} /></label>
-        <label className="compare-editor"><span>右侧文本</span><textarea value={rightInput} onChange={(event) => setRightInput(event.target.value)} placeholder={mode === "json" ? "粘贴 JSON" : "粘贴第二份文本"} spellCheck={false} /></label>
+        <label className="compare-editor">
+          <span>左侧文本</span>
+          <textarea
+            value={leftInput}
+            onChange={(event) => setLeftInput(event.target.value)}
+            placeholder={mode === "json" ? "粘贴 JSON" : "粘贴第一份文本"}
+            spellCheck={false}
+          />
+        </label>
+        <label className="compare-editor">
+          <span>右侧文本</span>
+          <textarea
+            value={rightInput}
+            onChange={(event) => setRightInput(event.target.value)}
+            placeholder={mode === "json" ? "粘贴 JSON" : "粘贴第二份文本"}
+            spellCheck={false}
+          />
+        </label>
       </div>
-      <div className="compare-result-head"><div><strong>对比结果</strong><span>相同 {summary.same} · 变更 {summary.changed} · 仅左 {summary.removed} · 仅右 {summary.added}</span></div><CopyButton value={rows.map((row) => `${row.left ?? ""}\t${row.right ?? ""}`).join("\n")} label="复制结果" /></div>
-      {!leftInput && !rightInput ? <p className="tool-empty">在上方粘贴两份文本开始比较。</p> : <div className="compare-result-grid">
-        <CompareColumn label="左侧" rows={rows} side="left" />
-        <CompareColumn label="右侧" rows={rows} side="right" />
-      </div>}
+      <div className="compare-result-head">
+        <div>
+          <strong>对比结果</strong>
+          <span>
+            相同 {summary.same} · 变更 {summary.changed} · 仅左 {summary.removed} · 仅右 {summary.added}
+          </span>
+        </div>
+        <CopyButton value={rows.map((row) => `${row.left ?? ""}\t${row.right ?? ""}`).join("\n")} label="复制结果" />
+      </div>
+      {!leftInput && !rightInput ? (
+        <p className="tool-empty">在上方粘贴两份文本开始比较。</p>
+      ) : (
+        <div className="compare-result-grid">
+          <CompareColumn label="左侧" rows={rows} side="left" />
+          <CompareColumn label="右侧" rows={rows} side="right" />
+        </div>
+      )}
     </section>
   );
 }
 
 function CompareColumn(props: { label: string; rows: DiffRow[]; side: "left" | "right" }) {
-  return <section className="compare-result-column"><header>{props.label}</header><div>{props.rows.map((row, index) => {
-    const text = props.side === "left" ? row.left : row.right;
-    const number = props.side === "left" ? row.leftNumber : row.rightNumber;
-    return <pre className={`compare-line ${row.state} ${text === undefined ? "empty" : ""}`} key={`${props.side}-${index}`}><span>{number ?? ""}</span><code>{text ?? ""}</code></pre>;
-  })}</div></section>;
+  return (
+    <section className="compare-result-column">
+      <header>{props.label}</header>
+      <div>
+        {props.rows.map((row, index) => {
+          const text = props.side === "left" ? row.left : row.right;
+          const number = props.side === "left" ? row.leftNumber : row.rightNumber;
+          return (
+            <pre
+              className={`compare-line ${row.state} ${text === undefined ? "empty" : ""}`}
+              key={`${props.side}-${index}`}
+            >
+              <span>{number ?? ""}</span>
+              <code>{text ?? ""}</code>
+            </pre>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function TextTool() {
@@ -557,17 +1080,58 @@ function TextTool() {
   const [deduplicate, setDeduplicate] = useState(true);
   const items = useMemo(() => splitItems(input, deduplicate), [deduplicate, input]);
   const output = useMemo(() => {
-    if (mode === "lines") return items.join("\n");
-    if (mode === "csv") return items.join(",");
+    if (mode === "lines") {
+      return items.join("\n");
+    }
+    if (mode === "csv") {
+      return items.join(",");
+    }
     return `(${items.map((item) => `'${item.replaceAll("'", "''")}'`).join(", ")})`;
   }, [items, mode]);
 
   return (
     <section className="tool-workspace">
-      <div className="tool-workspace-head"><div><h2>文本与 ID</h2><p>按逗号、空格、分号或换行拆分，去掉首尾空格。</p></div><div className="tool-workspace-actions text-tool-actions"><div className="text-tool-settings"><span className="tool-count">处理后 {items.length} 项</span><label className="dedupe-switch"><input type="checkbox" checked={deduplicate} onChange={(event) => setDeduplicate(event.target.checked)} /><span>去重</span></label></div><div className="segmented-control"><button className={mode === "lines" ? "selected" : ""} type="button" onClick={() => setMode("lines")}>每行一个</button><button className={mode === "csv" ? "selected" : ""} type="button" onClick={() => setMode("csv")}>逗号组合</button><button className={mode === "sql" ? "selected" : ""} type="button" onClick={() => setMode("sql")}>SQL IN</button></div><CopyButton value={output} /></div></div>
+      <div className="tool-workspace-head">
+        <div>
+          <h2>文本与 ID</h2>
+          <p>按逗号、空格、分号或换行拆分，去掉首尾空格。</p>
+        </div>
+        <div className="tool-workspace-actions text-tool-actions">
+          <div className="text-tool-settings">
+            <span className="tool-count">处理后 {items.length} 项</span>
+            <label className="dedupe-switch">
+              <input type="checkbox" checked={deduplicate} onChange={(event) => setDeduplicate(event.target.checked)} />
+              <span>去重</span>
+            </label>
+          </div>
+          <div className="segmented-control">
+            <button className={mode === "lines" ? "selected" : ""} type="button" onClick={() => setMode("lines")}>
+              每行一个
+            </button>
+            <button className={mode === "csv" ? "selected" : ""} type="button" onClick={() => setMode("csv")}>
+              逗号组合
+            </button>
+            <button className={mode === "sql" ? "selected" : ""} type="button" onClick={() => setMode("sql")}>
+              SQL IN
+            </button>
+          </div>
+          <CopyButton value={output} />
+        </div>
+      </div>
       <div className="tool-editor-grid">
-        <label className="tool-field"><span>输入</span><textarea className="log-editor tool-input" value={input} onChange={(event) => setInput(event.target.value)} spellCheck={false} /></label>
-        <div className="tool-field"><span>输出</span><pre className="tool-output">{output || "--"}</pre></div>
+        <label className="tool-field">
+          <span>输入</span>
+          <textarea
+            className="log-editor tool-input"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            spellCheck={false}
+          />
+        </label>
+        <div className="tool-field">
+          <span>输出</span>
+          <pre className="tool-output">{output || "--"}</pre>
+        </div>
       </div>
     </section>
   );
@@ -576,9 +1140,8 @@ function TextTool() {
 function TranslationTool(props: {
   providerId: TranslationProvider;
   setProviderId: (provider: TranslationProvider) => void;
-  credentials: Record<TranslationProvider, TranslationCredentials>;
-  onUpdateCredential: (key: keyof TranslationCredentials, value: string) => void;
   runtimeMode: "local" | "connected";
+  authenticated: boolean;
 }) {
   const [sourceLanguage, setSourceLanguage] = useState("zh");
   const [targetLanguage, setTargetLanguage] = useState("en");
@@ -587,11 +1150,96 @@ function TranslationTool(props: {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
   const [showConfiguration, setShowConfiguration] = useState(false);
+  const [configuration, setConfiguration] = useState<TranslationConfigurationInput>(emptyTranslationConfiguration);
+  const [configured, setConfigured] = useState(false);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configurationError, setConfigurationError] = useState("");
   const provider = translationProviders.find((item) => item.id === props.providerId) ?? translationProviders[0];
+  const needsConfiguration = props.runtimeMode === "connected" && props.authenticated && !configLoading && !configured;
+
+  useEffect(() => {
+    setConfiguration(emptyTranslationConfiguration);
+    setConfigurationError("");
+    setError("");
+    setTranslatedText("");
+
+    if (props.runtimeMode !== "connected" || !props.authenticated) {
+      setConfigured(false);
+      setConfigLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setConfigLoading(true);
+    void getTranslationConfiguration(props.providerId)
+      .then((response) => {
+        if (!cancelled) {
+          setConfigured(response.configured);
+        }
+      })
+      .catch((configurationRequestError) => {
+        if (!cancelled) {
+          setConfigured(false);
+          setConfigurationError(
+            configurationRequestError instanceof Error ? configurationRequestError.message : "无法检查服务端配置",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setConfigLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.authenticated, props.providerId, props.runtimeMode]);
+
+  function updateConfiguration(key: keyof TranslationConfigurationInput, value: string) {
+    setConfiguration((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveConfiguration() {
+    if (props.runtimeMode !== "connected") {
+      setConfigurationError("请先切换到服务运行模式，再将配置保存到服务端");
+      return;
+    }
+    if (!props.authenticated) {
+      setConfigurationError("请先登录，再将配置保存到服务端");
+      return;
+    }
+
+    setConfigSaving(true);
+    setConfigurationError("");
+    try {
+      const response = await saveTranslationConfiguration(props.providerId, configuration);
+      setConfigured(response.configured);
+      setConfiguration(emptyTranslationConfiguration);
+      setShowConfiguration(false);
+    } catch (configurationSaveError) {
+      setConfigured(false);
+      setConfigurationError(configurationSaveError instanceof Error ? configurationSaveError.message : "配置保存失败");
+    } finally {
+      setConfigSaving(false);
+    }
+  }
 
   async function translate() {
     if (props.runtimeMode !== "connected") {
       setError("翻译需要切换到“服务”运行模式后才能调用第三方厂商");
+      setStatus("error");
+      return;
+    }
+    if (!props.authenticated) {
+      setError("请先登录后再调用服务端翻译");
+      setStatus("error");
+      return;
+    }
+    if (!configured) {
+      setShowConfiguration(true);
+      setError("该厂商尚未完成服务端配置，请先保存配置");
       setStatus("error");
       return;
     }
@@ -608,7 +1256,6 @@ function TranslationTool(props: {
         text: sourceText,
         sourceLanguage,
         targetLanguage,
-        credentials: props.credentials[props.providerId],
       });
       setTranslatedText(response.translatedText);
       setStatus("idle");
@@ -621,59 +1268,283 @@ function TranslationTool(props: {
   return (
     <section className="translation-workspace">
       <div className="translation-toolbar">
-        <div><h2>文本翻译</h2><p>{props.runtimeMode === "connected" ? "通过已连接服务调用所选翻译厂商。" : "当前处于本地运行；切换到服务模式后才会发送翻译请求。"}</p></div>
+        <div>
+          <h2>文本翻译</h2>
+          <p>
+            {props.runtimeMode === "connected"
+              ? "通过已连接服务调用所选翻译厂商。"
+              : "当前处于本地运行；切换到服务模式后才会发送翻译请求。"}
+          </p>
+        </div>
         <div className="translation-controls">
-          <label><span>厂商</span><select value={props.providerId} onChange={(event) => props.setProviderId(event.target.value as TranslationProvider)}>{translationProviders.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-          <label><span>源语言</span><select value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value)}><option value="zh">中文</option><option value="en">英语</option><option value="ja">日语</option><option value="ko">韩语</option></select></label>
-          <button className="translation-swap" type="button" aria-label="交换源语言和目标语言" onClick={() => { setSourceLanguage(targetLanguage); setTargetLanguage(sourceLanguage); }}><ArrowLeftRight size={16} aria-hidden="true" /></button>
-          <label><span>目标语言</span><select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)}><option value="en">英语</option><option value="zh">中文</option><option value="ja">日语</option><option value="ko">韩语</option></select></label>
-          <button className="tool-action-button" type="button" onClick={() => setShowConfiguration((visible) => !visible)}><Settings2 size={15} aria-hidden="true" />配置</button>
+          <label>
+            <span>厂商</span>
+            <select
+              value={props.providerId}
+              onChange={(event) => props.setProviderId(event.target.value as TranslationProvider)}
+            >
+              {translationProviders.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>源语言</span>
+            <select value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value)}>
+              <option value="zh">中文</option>
+              <option value="en">英语</option>
+              <option value="ja">日语</option>
+              <option value="ko">韩语</option>
+            </select>
+          </label>
+          <button
+            className="translation-swap"
+            type="button"
+            aria-label="交换源语言和目标语言"
+            onClick={() => {
+              setSourceLanguage(targetLanguage);
+              setTargetLanguage(sourceLanguage);
+            }}
+          >
+            <ArrowLeftRight size={16} aria-hidden="true" />
+          </button>
+          <label>
+            <span>目标语言</span>
+            <select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)}>
+              <option value="en">英语</option>
+              <option value="zh">中文</option>
+              <option value="ja">日语</option>
+              <option value="ko">韩语</option>
+            </select>
+          </label>
+          <button
+            className="tool-action-button"
+            type="button"
+            onClick={() => setShowConfiguration((visible) => !visible)}
+          >
+            <Settings2 size={15} aria-hidden="true" />
+            配置
+          </button>
         </div>
       </div>
       <div className="translation-editor-grid">
-        <label className="translation-editor"><span>原文</span><textarea value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder="输入或粘贴需要翻译的文本" spellCheck={false} /></label>
-        <section className="translation-editor"><div className="translation-result-head"><span>译文</span><CopyButton value={translatedText} /></div><pre>{translatedText || "翻译结果会显示在这里"}</pre></section>
+        <label className="translation-editor">
+          <span>原文</span>
+          <textarea
+            value={sourceText}
+            onChange={(event) => setSourceText(event.target.value)}
+            placeholder="输入或粘贴需要翻译的文本"
+            spellCheck={false}
+          />
+        </label>
+        <section className="translation-editor">
+          <div className="translation-result-head">
+            <span>译文</span>
+            <CopyButton value={translatedText} />
+          </div>
+          <pre>{translatedText || "翻译结果会显示在这里"}</pre>
+        </section>
       </div>
-      {error ? <p className="translation-error" role="alert">{error}</p> : null}
-      {showConfiguration ? <section className="translation-inline-settings"><div><strong>{provider.label} 凭证</strong><p>仅保留在当前应用会话中，不写入浏览器存储。</p></div><div className="translation-settings-fields">{provider.credentialFields.map((field) => <label key={field.key}><span>{field.label}</span><input type="password" value={props.credentials[props.providerId][field.key]} onChange={(event) => props.onUpdateCredential(field.key, event.target.value)} placeholder={field.placeholder} autoComplete="off" /></label>)}</div></section> : null}
-      <div className="translation-submit-row"><span>当前使用：{provider.label}。通过“配置”维护当前会话凭证。</span><button className="translation-submit" type="button" onClick={() => void translate()} disabled={status === "loading" || props.runtimeMode !== "connected"}>{status === "loading" ? "翻译中..." : <><Send size={15} aria-hidden="true" />翻译</>}</button></div>
+      {error ? (
+        <p className="translation-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {configurationError ? (
+        <p className="translation-error" role="alert">
+          {configurationError}
+        </p>
+      ) : null}
+      {showConfiguration || needsConfiguration ? (
+        <section className="translation-inline-settings">
+          <div>
+            <strong>{provider.label} 服务端配置</strong>
+            <p>配置会提交给当前登录用户的服务端空间；保存后不会回显密钥。</p>
+          </div>
+          <div className="translation-settings-fields">
+            {provider.credentialFields.map((field) => (
+              <label key={field.key}>
+                <span>{field.label}</span>
+                <input
+                  type="password"
+                  value={configuration[field.key]}
+                  onChange={(event) => updateConfiguration(field.key, event.target.value)}
+                  placeholder={field.placeholder}
+                  autoComplete="off"
+                  disabled={props.runtimeMode !== "connected" || !props.authenticated || configSaving}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="translation-configuration-actions">
+            <button
+              className="tool-action-button"
+              type="button"
+              onClick={() => void saveConfiguration()}
+              disabled={props.runtimeMode !== "connected" || !props.authenticated || configSaving}
+            >
+              {configSaving ? "保存中..." : "保存到服务端"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      <div className="translation-submit-row">
+        <span>
+          {props.runtimeMode !== "connected"
+            ? "切换到服务模式后可检查配置并翻译。"
+            : !props.authenticated
+              ? "登录后可检查并使用自己的服务端翻译配置。"
+              : configLoading
+                ? "正在检查服务端配置..."
+                : configured
+                  ? `当前使用：${provider.label}，服务端配置已完成。`
+                  : `当前使用：${provider.label}，请先完成服务端配置。`}
+        </span>
+        <button
+          className="translation-submit"
+          type="button"
+          onClick={() => void translate()}
+          disabled={
+            status === "loading" ||
+            props.runtimeMode !== "connected" ||
+            !props.authenticated ||
+            configLoading ||
+            !configured
+          }
+        >
+          {status === "loading" ? (
+            "翻译中..."
+          ) : (
+            <>
+              <Send size={15} aria-hidden="true" />
+              翻译
+            </>
+          )}
+        </button>
+      </div>
     </section>
   );
 }
 
 function OutputPanel(props: { title: string; value: string }) {
-  return <section className="output-panel"><div className="tool-result-head"><strong>{props.title}</strong><CopyButton value={props.value} /></div><pre className="tool-output">{props.value}</pre></section>;
+  return (
+    <section className="output-panel">
+      <div className="tool-result-head">
+        <strong>{props.title}</strong>
+        <CopyButton value={props.value} />
+      </div>
+      <pre className="tool-output">{props.value}</pre>
+    </section>
+  );
 }
 
-function ToolWorkspace(props: { title: string; description: string; input: string; onInputChange: (value: string) => void; result: string; resultLabel: string; error: string; toolbar: ReactNode }) {
-  return <section className="tool-workspace"><div className="tool-workspace-head"><div><h2>{props.title}</h2><p>{props.description}</p></div>{props.toolbar}</div><div className="tool-editor-grid"><label className="tool-field"><span>输入</span><textarea className="log-editor tool-input" value={props.input} onChange={(event) => props.onInputChange(event.target.value)} spellCheck={false} /></label><div className="tool-field"><span>{props.resultLabel}</span>{props.error ? <p className="tool-error">{props.error}</p> : <pre className="tool-output">{props.result}</pre>}</div></div></section>;
+function ToolWorkspace(props: {
+  title: string;
+  description: string;
+  input: string;
+  onInputChange: (value: string) => void;
+  result: string;
+  resultLabel: string;
+  error: string;
+  toolbar: ReactNode;
+}) {
+  return (
+    <section className="tool-workspace">
+      <div className="tool-workspace-head">
+        <div>
+          <h2>{props.title}</h2>
+          <p>{props.description}</p>
+        </div>
+        {props.toolbar}
+      </div>
+      <div className="tool-editor-grid">
+        <label className="tool-field">
+          <span>输入</span>
+          <textarea
+            className="log-editor tool-input"
+            value={props.input}
+            onChange={(event) => props.onInputChange(event.target.value)}
+            spellCheck={false}
+          />
+        </label>
+        <div className="tool-field">
+          <span>{props.resultLabel}</span>
+          {props.error ? (
+            <p className="tool-error">{props.error}</p>
+          ) : (
+            <pre className="tool-output">{props.result}</pre>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ToolDirectory(props: { onOpen: (tool: ToolId) => void }) {
-  return <section className="tool-directory"><div className="tool-directory-head"><h2>开发工具</h2><p>选择一个工具进入独立工作区。纯本地工具不会请求服务。</p></div><div className="tool-card-grid">{tools.map((tool) => { const Icon = tool.icon; return <button className="tool-launcher-card" key={tool.id} type="button" onClick={() => props.onOpen(tool.id)}><div className="tool-launcher-card-head"><span className="tool-launcher-icon"><Icon size={19} aria-hidden="true" /></span><span className={`tool-service-badge ${tool.requiresService ? "service" : "local"}`}>{tool.requiresService ? "需要服务" : "纯本地"}</span></div><strong>{tool.label}</strong><p>{tool.description}</p></button>; })}</div></section>;
+  return (
+    <section className="tool-directory">
+      <div className="tool-directory-head">
+        <h2>开发工具</h2>
+        <p>选择一个工具进入独立工作区。纯本地工具不会请求服务。</p>
+      </div>
+      <div className="tool-card-grid">
+        {tools.map((tool) => {
+          const Icon = tool.icon;
+          return (
+            <button className="tool-launcher-card" key={tool.id} type="button" onClick={() => props.onOpen(tool.id)}>
+              <div className="tool-launcher-card-head">
+                <span className="tool-launcher-icon">
+                  <Icon size={19} aria-hidden="true" />
+                </span>
+                <span className={`tool-service-badge ${tool.requiresService ? "service" : "local"}`}>
+                  {tool.requiresService ? "需要服务" : "纯本地"}
+                </span>
+              </div>
+              <strong>{tool.label}</strong>
+              <p>{tool.description}</p>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function DeveloperToolboxPlugin(props: { context: PluginContext }) {
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [translationProviderId, setTranslationProviderId] = useState<TranslationProvider>("baidu");
-  const [translationCredentials, setTranslationCredentials] = useState<Record<TranslationProvider, TranslationCredentials>>({ baidu: { ...emptyCredentials }, youdao: { ...emptyCredentials }, google: { ...emptyCredentials }, alibaba: { ...emptyCredentials } });
 
-  function updateTranslationCredential(key: keyof TranslationCredentials, value: string) {
-    setTranslationCredentials((current) => ({ ...current, [translationProviderId]: { ...current[translationProviderId], [key]: value } }));
+  if (!activeTool) {
+    return <ToolDirectory onOpen={setActiveTool} />;
   }
-
-  if (!activeTool) return <ToolDirectory onOpen={setActiveTool} />;
 
   return (
     <section className="toolbox-shell">
-      <div className="tool-surface-nav"><button type="button" onClick={() => setActiveTool(null)}><ArrowLeft size={16} aria-hidden="true" />全部工具</button><span className={props.context.runtimeMode === "connected" ? "connected" : ""}>{props.context.runtimeMode === "connected" ? "已连接服务" : "本地运行"}</span></div>
+      <div className="tool-surface-nav">
+        <button type="button" onClick={() => setActiveTool(null)}>
+          <ArrowLeft size={16} aria-hidden="true" />
+          全部工具
+        </button>
+        <span className={props.context.runtimeMode === "connected" ? "connected" : ""}>
+          {props.context.runtimeMode === "connected" ? "已连接服务" : "本地运行"}
+        </span>
+      </div>
       {activeTool === "json" ? <JsonTool /> : null}
       {activeTool === "timestamp" ? <TimestampTool /> : null}
       {activeTool === "timer" ? <TimerTool /> : null}
       {activeTool === "jwt" ? <JwtTool /> : null}
       {activeTool === "diff" ? <DiffTool /> : null}
       {activeTool === "text" ? <TextTool /> : null}
-      {activeTool === "translate" ? <TranslationTool providerId={translationProviderId} setProviderId={setTranslationProviderId} credentials={translationCredentials} onUpdateCredential={updateTranslationCredential} runtimeMode={props.context.runtimeMode} /> : null}
+      {activeTool === "translate" ? (
+        <TranslationTool
+          providerId={translationProviderId}
+          setProviderId={setTranslationProviderId}
+          runtimeMode={props.context.runtimeMode}
+          authenticated={Boolean(props.context.auth)}
+        />
+      ) : null}
     </section>
   );
 }

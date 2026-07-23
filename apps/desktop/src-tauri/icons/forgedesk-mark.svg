@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>ForgeDesk</title>
+  <rect width="512" height="512" rx="116" fill="#101820"/>
+  <path d="M116 100h274v72H190v58h158v70H190v112h-74z" fill="#54d2e4"/>
+  <path d="M190 172h126v58H190z" fill="#0c0f14" opacity=".82"/>
+  <circle cx="390" cy="116" r="30" fill="#f5bd67"/>
+</svg>

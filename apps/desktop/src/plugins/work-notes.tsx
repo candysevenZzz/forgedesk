@@ -1,13 +1,65 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Cloud, GripVertical, HardDrive, ListTodo, Pin, Plus, RefreshCw, StickyNote, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Cloud,
+  GripVertical,
+  HardDrive,
+  ListTodo,
+  Pin,
+  Plus,
+  RefreshCw,
+  StickyNote,
+  Trash2,
+  X,
+} from "lucide-react";
 import { syncWorkNotes } from "../api";
-import { loadWorkNotes, saveWorkNotes, todayWorkNotesDate, type WorkNote, type WorkNoteKind, type WorkNotesArchive } from "../work-notes-storage";
+import {
+  loadWorkNotes,
+  saveWorkNotes,
+  todayWorkNotesDate,
+  type WorkNote,
+  type WorkNoteKind,
+  type WorkNotesArchive,
+} from "../work-notes-storage";
 import type { PluginContext, PluginDefinition } from "../types";
 
 const seedNotes: WorkNote[] = [
-  { id: "memo-welcome", kind: "memo", title: "", content: "", completed: false, pinned: false, x: 0, y: 0, zIndex: 1, updatedAt: new Date().toISOString() },
-  { id: "todo-welcome", kind: "todo", title: "", content: "", completed: false, pinned: false, x: 0, y: 0, zIndex: 1, updatedAt: new Date().toISOString() },
-  { id: "card-welcome", kind: "card", title: "", content: "", completed: false, pinned: false, x: 24, y: 24, zIndex: 1, updatedAt: new Date().toISOString() },
+  {
+    id: "memo-welcome",
+    kind: "memo",
+    title: "",
+    content: "",
+    completed: false,
+    pinned: false,
+    x: 0,
+    y: 0,
+    zIndex: 1,
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "todo-welcome",
+    kind: "todo",
+    title: "",
+    content: "",
+    completed: false,
+    pinned: false,
+    x: 0,
+    y: 0,
+    zIndex: 1,
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "card-welcome",
+    kind: "card",
+    title: "",
+    content: "",
+    completed: false,
+    pinned: false,
+    x: 24,
+    y: 24,
+    zIndex: 1,
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 type DragState = { id: string; offsetX: number; offsetY: number } | null;
@@ -19,7 +71,11 @@ function clearLegacySeedText(note: WorkNote): WorkNote {
   if (note.id === "todo-welcome" && note.title === "开始今天的工作" && !note.content) {
     return { ...note, title: "" };
   }
-  if (note.id === "card-welcome" && note.title === "可拖动卡片" && note.content === "拖动标题栏改变位置；置顶可让它显示在其它卡片上方。") {
+  if (
+    note.id === "card-welcome" &&
+    note.title === "可拖动卡片" &&
+    note.content === "拖动标题栏改变位置；置顶可让它显示在其它卡片上方。"
+  ) {
     return { ...note, title: "", content: "" };
   }
   return note;
@@ -42,9 +98,22 @@ function createNote(kind: WorkNoteKind, position: number): WorkNote {
 }
 
 function formatHistoryDate(date: string, today: string) {
-  if (date === today) return "今天";
-  return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "long", day: "numeric", weekday: "short" })
-    .format(new Date(`${date}T00:00:00+08:00`));
+  const parts = historyDateParts(date, today);
+  return `${parts.primary} ${parts.secondary}`;
+}
+
+function historyDateParts(date: string, today: string) {
+  const formatted = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(new Date(`${date}T00:00:00+08:00`));
+  const value = (type: Intl.DateTimeFormatPartTypes) => formatted.find((part) => part.type === type)?.value ?? "";
+  return {
+    primary: date === today ? "今天" : `${value("month")}月${value("day")}日`,
+    secondary: date === today ? `周${value("weekday").replace("周", "").replace("星期", "")}` : value("weekday"),
+  };
 }
 
 function WorkNotesPlugin(props: { context: PluginContext }) {
@@ -62,21 +131,33 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
 
   useEffect(() => {
     void loadWorkNotes().then((savedArchive) => {
-      const days = Object.fromEntries(Object.entries(savedArchive.days).map(([date, notes]) => [date, notes.map(clearLegacySeedText)]));
-      setArchive({ version: 2, days: { ...days, [today]: days[today] ?? seedNotes }, tombstones: savedArchive.tombstones });
+      const days = Object.fromEntries(
+        Object.entries(savedArchive.days).map(([date, notes]) => [date, notes.map(clearLegacySeedText)]),
+      );
+      setArchive({
+        version: 2,
+        days: { ...days, [today]: days[today] ?? seedNotes },
+        tombstones: savedArchive.tombstones,
+      });
       setSelectedDate(today);
       setLoaded(true);
     });
   }, [today]);
 
   useEffect(() => {
-    if (!loaded) return undefined;
-    const timeout = window.setTimeout(() => { void saveWorkNotes(archive); }, 350);
+    if (!loaded) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      void saveWorkNotes(archive);
+    }, 350);
     return () => window.clearTimeout(timeout);
   }, [archive, loaded]);
 
   async function syncNow() {
-    if (!loaded || props.context.runtimeMode !== "connected" || syncingRef.current) return;
+    if (!loaded || props.context.runtimeMode !== "connected" || !props.context.auth || syncingRef.current) {
+      return;
+    }
     const snapshot = JSON.stringify(archive);
     lastSyncAttemptArchiveRef.current = snapshot;
     syncingRef.current = true;
@@ -85,8 +166,10 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
       const result = await syncWorkNotes(archive);
       const merged = { ...result.archive, version: 2 as const, tombstones: result.archive.tombstones ?? {} };
       lastSyncedArchiveRef.current = JSON.stringify(merged);
-      setArchive((current) => JSON.stringify(current) === snapshot ? merged : current);
-      setSyncStatus(`已同步 ${new Date(result.syncedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`);
+      setArchive((current) => (JSON.stringify(current) === snapshot ? merged : current));
+      setSyncStatus(
+        `已同步 ${new Date(result.syncedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`,
+      );
     } catch {
       setSyncStatus("同步失败，本地内容未受影响");
     } finally {
@@ -96,13 +179,19 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
   }
 
   useEffect(() => {
-    if (!loaded || props.context.runtimeMode !== "connected") {
-      if (loaded) setSyncStatus("本地保存");
+    if (!loaded || props.context.runtimeMode !== "connected" || !props.context.auth) {
+      if (loaded) {
+        setSyncStatus(props.context.runtimeMode === "connected" ? "登录后可同步" : "本地保存");
+      }
       return undefined;
     }
     const serialized = JSON.stringify(archive);
-    if (serialized === lastSyncedArchiveRef.current || serialized === lastSyncAttemptArchiveRef.current) return undefined;
-    const timeout = window.setTimeout(() => { void syncNow(); }, 700);
+    if (serialized === lastSyncedArchiveRef.current || serialized === lastSyncAttemptArchiveRef.current) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      void syncNow();
+    }, 700);
     return () => window.clearTimeout(timeout);
   }, [archive, loaded, props.context.runtimeMode, syncTick]);
 
@@ -117,7 +206,9 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
   }
 
   function updateNote(id: string, changes: Partial<WorkNote>) {
-    updateCurrentDay((current) => current.map((note) => note.id === id ? { ...note, ...changes, updatedAt: new Date().toISOString() } : note));
+    updateCurrentDay((current) =>
+      current.map((note) => (note.id === id ? { ...note, ...changes, updatedAt: new Date().toISOString() } : note)),
+    );
   }
 
   function addNote(kind: WorkNoteKind) {
@@ -139,15 +230,23 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
   }
 
   function startDragging(event: React.PointerEvent<HTMLDivElement>, note: WorkNote) {
-    if (!boardRef.current) return;
+    if (!boardRef.current) {
+      return;
+    }
     const rect = boardRef.current.getBoundingClientRect();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragging({ id: note.id, offsetX: event.clientX - rect.left - note.x, offsetY: event.clientY - rect.top - note.y });
+    setDragging({
+      id: note.id,
+      offsetX: event.clientX - rect.left - note.x,
+      offsetY: event.clientY - rect.top - note.y,
+    });
     raiseNote(note.id, note.pinned);
   }
 
   function moveCard(event: React.PointerEvent<HTMLDivElement>) {
-    if (!dragging || !boardRef.current) return;
+    if (!dragging || !boardRef.current) {
+      return;
+    }
     const rect = boardRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(rect.width - 248, event.clientX - rect.left - dragging.offsetX));
     const y = Math.max(0, Math.min(rect.height - 150, event.clientY - rect.top - dragging.offsetY));
@@ -161,29 +260,246 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
 
   return (
     <section className="work-notes-shell">
-      <div className="work-notes-toolbar"><div><h2>工作笔记</h2><p>{loaded ? `${selectedDateLabel}的内容保存在本机应用数据目录。` : "正在加载本地笔记..."}</p></div><div className="work-notes-actions"><span className={`notes-sync-state ${props.context.runtimeMode}`}><>{props.context.runtimeMode === "connected" ? <Cloud size={15} aria-hidden="true" /> : <HardDrive size={15} aria-hidden="true" />}</>{syncStatus}</span>{props.context.runtimeMode === "connected" ? <button type="button" onClick={() => void syncNow()} disabled={!props.context.serviceOnline}><RefreshCw size={15} aria-hidden="true" />立即同步</button> : null}<button type="button" onClick={() => addNote("memo")}><StickyNote size={16} aria-hidden="true" />备忘录</button><button type="button" onClick={() => addNote("todo")}><ListTodo size={16} aria-hidden="true" />待办</button><button className="note-card-action" type="button" onClick={() => addNote("card")}><Plus size={16} aria-hidden="true" />笔记卡片</button></div></div>
+      <div className="work-notes-toolbar">
+        <div>
+          <h2>工作笔记</h2>
+          <p>
+            {loaded
+              ? props.context.runtimeMode === "connected"
+                ? props.context.auth
+                  ? `${selectedDateLabel}的内容先保存到本机，变更后会与服务端合并。`
+                  : "登录后可将笔记安全同步到自己的服务端归档。"
+                : `${selectedDateLabel}的内容仅保存在本机应用数据目录。`
+              : "正在加载本地笔记..."}
+          </p>
+        </div>
+        <div className="work-notes-actions">
+          <span className={`notes-sync-state ${props.context.runtimeMode}`}>
+            <>
+              {props.context.runtimeMode === "connected" ? (
+                <Cloud size={15} aria-hidden="true" />
+              ) : (
+                <HardDrive size={15} aria-hidden="true" />
+              )}
+            </>
+            {syncStatus}
+          </span>
+          {props.context.runtimeMode === "connected" ? (
+            <button
+              type="button"
+              onClick={() => void syncNow()}
+              disabled={!props.context.serviceOnline || !props.context.auth}
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+              立即同步
+            </button>
+          ) : null}
+          <button type="button" onClick={() => addNote("memo")}>
+            <StickyNote size={16} aria-hidden="true" />
+            备忘录
+          </button>
+          <button type="button" onClick={() => addNote("todo")}>
+            <ListTodo size={16} aria-hidden="true" />
+            待办
+          </button>
+          <button className="note-card-action" type="button" onClick={() => addNote("card")}>
+            <Plus size={16} aria-hidden="true" />
+            笔记卡片
+          </button>
+        </div>
+      </div>
+      <section className="notes-date-filter">
+        <div className="notes-date-filter-head">
+          <span>
+            <CalendarDays size={15} aria-hidden="true" />
+            按日期查看
+          </span>
+          <small>{historyDates.length} 天记录</small>
+        </div>
+        <div className="notes-date-rail">
+          {historyDates.map((date) => {
+            const dateNotes = archive.days[date];
+            const dateParts = historyDateParts(date, today);
+            return (
+              <button
+                className={`notes-date-chip ${date === selectedDate ? "active" : ""}`}
+                key={date}
+                type="button"
+                onClick={() => setSelectedDate(date)}
+                aria-pressed={date === selectedDate}
+                title={date}
+              >
+                <span>
+                  <strong>{dateParts.primary}</strong>
+                  <small>{dateParts.secondary}</small>
+                </span>
+                <em>{dateNotes.length}</em>
+              </button>
+            );
+          })}
+        </div>
+      </section>
       <div className="work-notes-layout">
         <aside className="notes-side-list">
-          <section className="notes-day-history"><div className="notes-list-head"><strong>日期记录</strong><span>{historyDates.length} 天</span></div><div className="notes-day-list">{historyDates.map((date) => { const dateNotes = archive.days[date]; return <button className={`notes-day-button ${date === selectedDate ? "active" : ""}`} key={date} type="button" onClick={() => setSelectedDate(date)} aria-pressed={date === selectedDate}><CalendarDays size={15} aria-hidden="true" /><span><strong>{formatHistoryDate(date, today)}</strong><small>{date}</small></span><em>{dateNotes.length}</em></button>; })}</div></section>
-          <section><div className="notes-list-head"><strong>备忘录</strong><span>{memos.length}</span></div><div className="notes-list-items">{memos.map((note) => <MemoItem key={note.id} note={note} onUpdate={updateNote} onDelete={deleteNote} />)}</div></section>
-          <section><div className="notes-list-head"><strong>工作待办</strong><span>{todos.filter((note) => !note.completed).length}/{todos.length}</span></div><div className="notes-list-items">{todos.map((note) => <TodoItem key={note.id} note={note} onUpdate={updateNote} onDelete={deleteNote} />)}</div></section>
+          <section>
+            <div className="notes-list-head">
+              <strong>备忘录</strong>
+              <span>{memos.length}</span>
+            </div>
+            <div className="notes-list-items">
+              {memos.map((note) => (
+                <MemoItem key={note.id} note={note} onUpdate={updateNote} onDelete={deleteNote} />
+              ))}
+            </div>
+          </section>
+          <section>
+            <div className="notes-list-head">
+              <strong>工作待办</strong>
+              <span>
+                {todos.filter((note) => !note.completed).length}/{todos.length}
+              </span>
+            </div>
+            <div className="notes-list-items">
+              {todos.map((note) => (
+                <TodoItem key={note.id} note={note} onUpdate={updateNote} onDelete={deleteNote} />
+              ))}
+            </div>
+          </section>
         </aside>
-        <div className="note-board-wrap"><div className="note-board-head"><strong>笔记卡片</strong><span>{selectedDateLabel} · 拖动卡片标题栏调整位置</span></div><div className="note-board" ref={boardRef} onPointerMove={moveCard} onPointerUp={() => setDragging(null)} onPointerCancel={() => setDragging(null)}>{cards.map((note) => <FloatingCard key={note.id} note={note} onUpdate={updateNote} onDelete={deleteNote} onRaise={raiseNote} onDragStart={startDragging} />)}</div></div>
+        <div className="note-board-wrap">
+          <div className="note-board-head">
+            <strong>笔记卡片</strong>
+            <span>{selectedDateLabel} · 拖动卡片标题栏调整位置</span>
+          </div>
+          <div
+            className="note-board"
+            ref={boardRef}
+            onPointerMove={moveCard}
+            onPointerUp={() => setDragging(null)}
+            onPointerCancel={() => setDragging(null)}
+          >
+            {cards.map((note) => (
+              <FloatingCard
+                key={note.id}
+                note={note}
+                onUpdate={updateNote}
+                onDelete={deleteNote}
+                onRaise={raiseNote}
+                onDragStart={startDragging}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-function MemoItem(props: { note: WorkNote; onUpdate: (id: string, changes: Partial<WorkNote>) => void; onDelete: (id: string) => void }) {
-  return <article className="memo-item"><input value={props.note.title} aria-label="备忘录标题" placeholder="备忘录标题" onChange={(event) => props.onUpdate(props.note.id, { title: event.target.value })} /><textarea value={props.note.content} aria-label="备忘录内容" onChange={(event) => props.onUpdate(props.note.id, { content: event.target.value })} placeholder="记录需要跟进的想法和信息" /><button className="note-delete" type="button" onClick={() => props.onDelete(props.note.id)} aria-label="删除备忘录"><Trash2 size={14} aria-hidden="true" /></button></article>;
+function MemoItem(props: {
+  note: WorkNote;
+  onUpdate: (id: string, changes: Partial<WorkNote>) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <article className="memo-item">
+      <input
+        value={props.note.title}
+        aria-label="备忘录标题"
+        placeholder="备忘录标题"
+        onChange={(event) => props.onUpdate(props.note.id, { title: event.target.value })}
+      />
+      <textarea
+        value={props.note.content}
+        aria-label="备忘录内容"
+        onChange={(event) => props.onUpdate(props.note.id, { content: event.target.value })}
+        placeholder="记录需要跟进的想法和信息"
+      />
+      <button
+        className="note-delete"
+        type="button"
+        onClick={() => props.onDelete(props.note.id)}
+        aria-label="删除备忘录"
+      >
+        <Trash2 size={14} aria-hidden="true" />
+      </button>
+    </article>
+  );
 }
 
-function TodoItem(props: { note: WorkNote; onUpdate: (id: string, changes: Partial<WorkNote>) => void; onDelete: (id: string) => void }) {
-  return <article className={`todo-item ${props.note.completed ? "completed" : ""}`}><label><input type="checkbox" checked={props.note.completed} onChange={(event) => props.onUpdate(props.note.id, { completed: event.target.checked })} /><input value={props.note.title} aria-label="待办标题" placeholder="写下待办事项" onChange={(event) => props.onUpdate(props.note.id, { title: event.target.value })} /></label><button className="note-delete" type="button" onClick={() => props.onDelete(props.note.id)} aria-label="删除待办"><Trash2 size={14} aria-hidden="true" /></button></article>;
+function TodoItem(props: {
+  note: WorkNote;
+  onUpdate: (id: string, changes: Partial<WorkNote>) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <article className={`todo-item ${props.note.completed ? "completed" : ""}`}>
+      <label>
+        <input
+          type="checkbox"
+          checked={props.note.completed}
+          onChange={(event) => props.onUpdate(props.note.id, { completed: event.target.checked })}
+        />
+        <input
+          value={props.note.title}
+          aria-label="待办标题"
+          placeholder="写下待办事项"
+          onChange={(event) => props.onUpdate(props.note.id, { title: event.target.value })}
+        />
+      </label>
+      <button className="note-delete" type="button" onClick={() => props.onDelete(props.note.id)} aria-label="删除待办">
+        <Trash2 size={14} aria-hidden="true" />
+      </button>
+    </article>
+  );
 }
 
-function FloatingCard(props: { note: WorkNote; onUpdate: (id: string, changes: Partial<WorkNote>) => void; onDelete: (id: string) => void; onRaise: (id: string, pin: boolean) => void; onDragStart: (event: React.PointerEvent<HTMLDivElement>, note: WorkNote) => void }) {
-  return <article className={`floating-note ${props.note.pinned ? "pinned" : ""}`} style={{ left: props.note.x, top: props.note.y, zIndex: props.note.zIndex }}><div className="floating-note-head" onPointerDown={(event) => props.onDragStart(event, props.note)}><GripVertical size={16} aria-hidden="true" /><input value={props.note.title} aria-label="笔记卡片标题" placeholder="笔记卡片标题" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => props.onUpdate(props.note.id, { title: event.target.value })} /><button type="button" className={props.note.pinned ? "pinned" : ""} onPointerDown={(event) => event.stopPropagation()} onClick={() => props.onRaise(props.note.id, !props.note.pinned)} aria-label={props.note.pinned ? "取消置顶" : "置顶卡片"}><Pin size={14} aria-hidden="true" /></button><button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => props.onDelete(props.note.id)} aria-label="删除笔记卡片"><X size={14} aria-hidden="true" /></button></div><textarea value={props.note.content} aria-label="笔记卡片内容" onChange={(event) => props.onUpdate(props.note.id, { content: event.target.value })} placeholder="记录这张卡片的内容" /></article>;
+function FloatingCard(props: {
+  note: WorkNote;
+  onUpdate: (id: string, changes: Partial<WorkNote>) => void;
+  onDelete: (id: string) => void;
+  onRaise: (id: string, pin: boolean) => void;
+  onDragStart: (event: React.PointerEvent<HTMLDivElement>, note: WorkNote) => void;
+}) {
+  return (
+    <article
+      className={`floating-note ${props.note.pinned ? "pinned" : ""}`}
+      style={{ left: props.note.x, top: props.note.y, zIndex: props.note.zIndex }}
+    >
+      <div className="floating-note-head" onPointerDown={(event) => props.onDragStart(event, props.note)}>
+        <GripVertical size={16} aria-hidden="true" />
+        <input
+          value={props.note.title}
+          aria-label="笔记卡片标题"
+          placeholder="笔记卡片标题"
+          onPointerDown={(event) => event.stopPropagation()}
+          onChange={(event) => props.onUpdate(props.note.id, { title: event.target.value })}
+        />
+        <button
+          type="button"
+          className={props.note.pinned ? "pinned" : ""}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => props.onRaise(props.note.id, !props.note.pinned)}
+          aria-label={props.note.pinned ? "取消置顶" : "置顶卡片"}
+        >
+          <Pin size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => props.onDelete(props.note.id)}
+          aria-label="删除笔记卡片"
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      </div>
+      <textarea
+        value={props.note.content}
+        aria-label="笔记卡片内容"
+        onChange={(event) => props.onUpdate(props.note.id, { content: event.target.value })}
+        placeholder="记录这张卡片的内容"
+      />
+    </article>
+  );
 }
 
 export const workNotesPlugin: PluginDefinition = {
