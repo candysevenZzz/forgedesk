@@ -1,0 +1,20 @@
+server:
+  port: 8088
+
+debug: false
+
+spring:
+  application:
+    name: forgedesk-backend
+
+logging:
+  level:
+    root: INFO
+    org.springframework: INFO
+    app.forgedesk: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

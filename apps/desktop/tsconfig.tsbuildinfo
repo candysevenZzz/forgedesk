@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/platform-home.tsx","./src/runtime-settings-storage.ts","./src/types.ts","./src/vite-env.d.ts","./src/work-notes-storage.ts","./src/plugins/developer-toolbox.tsx","./src/plugins/index.tsx","./src/plugins/log-inspector.tsx","./src/plugins/work-notes.tsx"],"version":"6.0.3"}

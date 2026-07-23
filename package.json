@@ -1,0 +1,23 @@
+{
+  "name": "forgedesk",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "bash ./scripts/dev.sh",
+    "start": "bash ./scripts/start.sh",
+    "start:full": "bash ./scripts/start.sh --with-backend",
+    "start:web": "bash ./scripts/start.sh --web-only",
+    "start:backend": "bash ./scripts/start.sh --backend-only",
+    "stop": "bash ./scripts/stop.sh",
+    "dev:web": "bash ./scripts/dev-web.sh",
+    "dev:web:full": "bash ./scripts/dev-web.sh --with-backend",
+    "dev:desktop": "bash ./scripts/dev-desktop.sh",
+    "build:web": "npm --workspace apps/desktop run build",
+    "backend:dev": "bash ./scripts/maven.sh -f apps/backend/pom.xml spring-boot:run",
+    "backend:test": "bash ./scripts/maven.sh -f apps/backend/pom.xml test",
+    "check": "npm --workspace apps/desktop run check && npm run backend:test"
+  }
+}
