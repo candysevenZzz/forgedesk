@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Camera, UserRound } from "lucide-react";
 import { assetUrl, updateAvatar, updatePassword, updateProfile, type AuthUser } from "./api";
+import { compressAvatar } from "./avatar-image";
 
 export function ProfileDialog(props: { user: AuthUser; onUpdated: (user: AuthUser) => void; onClose: () => void }) {
   const [displayName, setDisplayName] = useState(props.user.displayName);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [preview, setPreview] = useState(props.user.avatarUrl ? assetUrl(props.user.avatarUrl) : "");
+  const [avatarStatus, setAvatarStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,29 +36,24 @@ export function ProfileDialog(props: { user: AuthUser; onUpdated: (user: AuthUse
       setSaving(false);
     }
   }
-  function chooseAvatar(file: File | undefined) {
+  async function chooseAvatar(file: File | undefined) {
     if (!file) {
       return;
     }
-    if (!file.type.match(/^image\/(png|jpeg|webp)$/)) {
-      setError("请选择 PNG、JPEG 或 WebP 图片");
-      return;
+    setSaving(true);
+    setError("");
+    setAvatarStatus("正在压缩头像...");
+    try {
+      const avatar = await compressAvatar(file);
+      setPreview(avatar.dataUrl);
+      setAvatarStatus(`已压缩为 WebP，${Math.max(1, Math.round(avatar.sizeBytes / 1024))} KB`);
+      props.onUpdated(await updateAvatar(avatar.dataUrl));
+    } catch (value) {
+      setAvatarStatus("");
+      setError(value instanceof Error ? value.message : "无法上传头像");
+    } finally {
+      setSaving(false);
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = String(reader.result);
-      setPreview(dataUrl);
-      setSaving(true);
-      setError("");
-      try {
-        props.onUpdated(await updateAvatar(dataUrl));
-      } catch (value) {
-        setError(value instanceof Error ? value.message : "无法上传头像");
-      } finally {
-        setSaving(false);
-      }
-    };
-    reader.readAsDataURL(file);
   }
   return (
     <div className="auth-dialog-backdrop" role="presentation">
@@ -80,9 +77,14 @@ export function ProfileDialog(props: { user: AuthUser; onUpdated: (user: AuthUse
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => chooseAvatar(event.target.files?.[0])}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                void chooseAvatar(file);
+              }}
             />
           </label>
+          {avatarStatus ? <span className="profile-avatar-status">{avatarStatus}</span> : null}
         </div>
         <form
           className="auth-form"

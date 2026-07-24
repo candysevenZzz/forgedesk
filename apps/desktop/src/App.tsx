@@ -1,5 +1,18 @@
-import { useEffect, useState } from "react";
-import { Anvil, Cloud, HardDrive, Home, LogIn, LogOut, Search, ShieldCheck, ServerCog, UserRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Anvil,
+  Cloud,
+  Command,
+  HardDrive,
+  Home,
+  LogIn,
+  LogOut,
+  Search,
+  ShieldCheck,
+  ServerCog,
+  UserRound,
+  X,
+} from "lucide-react";
 import { AdminPage } from "./admin-page";
 import {
   assetUrl,
@@ -27,6 +40,99 @@ function savedPluginId() {
   return value === "__home" || (value && plugins.some((plugin) => plugin.id === value)) ? value : "developer-toolbox";
 }
 
+function CommandPalette(props: {
+  plugins: PluginDefinition[];
+  onClose: () => void;
+  onOpenHome: () => void;
+  onOpenPlugin: (pluginId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = props.plugins.filter((plugin) => {
+    const haystack = `${plugin.name} ${plugin.description} ${plugin.shortcuts.join(" ")}`.toLowerCase();
+    return !normalizedQuery || haystack.includes(normalizedQuery);
+  });
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  function selectPlugin(pluginId: string) {
+    props.onOpenPlugin(pluginId);
+    props.onClose();
+  }
+
+  return (
+    <div className="command-palette-backdrop" role="presentation" onMouseDown={props.onClose}>
+      <section
+        className="command-palette"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-palette-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>快速切换</span>
+            <h2 id="command-palette-title">命令面板</h2>
+          </div>
+          <button className="icon-button" type="button" onClick={props.onClose} data-tooltip="关闭" aria-label="关闭">
+            <X size={16} aria-hidden="true" />
+          </button>
+        </header>
+        <label className="command-palette-search">
+          <Search size={19} aria-hidden="true" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                props.onClose();
+              }
+            }}
+            placeholder="搜索插件"
+            aria-label="搜索插件"
+          />
+          <kbd>Esc</kbd>
+        </label>
+        <div className="command-palette-list">
+          <button className="command-palette-item" type="button" onClick={props.onOpenHome}>
+            <span className="command-palette-icon home">
+              <Home size={17} aria-hidden="true" />
+            </span>
+            <span>
+              <strong>平台首页</strong>
+              <small>返回当前工作台</small>
+            </span>
+          </button>
+          {matches.map((plugin) => {
+            const Icon = plugin.icon;
+            return (
+              <button
+                className="command-palette-item"
+                key={plugin.id}
+                type="button"
+                onClick={() => selectPlugin(plugin.id)}
+              >
+                <span className={`command-palette-icon accent-${plugin.accent}`}>
+                  <Icon size={17} aria-hidden="true" />
+                </span>
+                <span>
+                  <strong>{plugin.name}</strong>
+                  <small>{plugin.description}</small>
+                </span>
+              </button>
+            );
+          })}
+          {!matches.length ? <p className="command-palette-empty">没有匹配的插件</p> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [activePluginId, setActivePluginId] = useState<string>(savedPluginId);
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>("local");
@@ -37,6 +143,7 @@ function App() {
   const [auth, setAuth] = useState<AuthUser | null>(null);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [isAdminPage, setIsAdminPage] = useState(() => window.location.hash === "#/admin");
 
   const visiblePlugins = plugins;
@@ -61,6 +168,20 @@ function App() {
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isAdminPage) {
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setShowCommandPalette(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isAdminPage]);
 
   useEffect(() => {
     void loadSessionToken().then(async (token) => {
@@ -148,10 +269,17 @@ function App() {
           </div>
         </div>
 
-        <div className="command-prompt">
+        <button
+          className="command-prompt"
+          type="button"
+          onClick={() => setShowCommandPalette(true)}
+          aria-label="打开命令面板"
+          aria-keyshortcuts="Control+K Meta+K"
+        >
           <Search size={16} aria-hidden="true" />
-          <span>命令面板即将接入</span>
-        </div>
+          <span>搜索或切换插件</span>
+          <kbd>⌘ K</kbd>
+        </button>
 
         <nav className="sidebar-section">
           <button
@@ -171,7 +299,7 @@ function App() {
               const Icon = plugin.icon;
               return (
                 <button
-                  className={`nav-item ${activePlugin.id === plugin.id ? "active" : ""}`}
+                  className={`nav-item ${activePluginId === plugin.id ? "active" : ""}`}
                   key={plugin.id}
                   type="button"
                   onClick={() => setActivePluginId(plugin.id)}
@@ -180,7 +308,7 @@ function App() {
                   <span>{plugin.name}</span>
                   <i
                     className={`plugin-service-dot ${plugin.serviceRequirement}`}
-                    title={
+                    data-tooltip={
                       plugin.serviceRequirement === "local"
                         ? "纯本地"
                         : plugin.serviceRequirement === "sync"
@@ -240,7 +368,7 @@ function App() {
                   className="account-profile"
                   type="button"
                   onClick={() => setShowProfileDialog(true)}
-                  title="个人资料"
+                  data-tooltip="个人资料"
                 >
                   <span className="account-avatar">
                     {auth.avatarUrl ? (
@@ -260,7 +388,7 @@ function App() {
                     className="icon-button"
                     type="button"
                     onClick={openAdminPage}
-                    title="打开管理端"
+                    data-tooltip="打开管理端"
                     aria-label="打开管理端"
                   >
                     <ServerCog size={16} aria-hidden="true" />
@@ -270,7 +398,7 @@ function App() {
                   className="icon-button"
                   type="button"
                   onClick={() => void signOut()}
-                  title="退出登录"
+                  data-tooltip="退出登录"
                   aria-label="退出登录"
                 >
                   <LogOut size={16} aria-hidden="true" />
@@ -322,6 +450,17 @@ function App() {
       ) : null}
       {showProfileDialog && auth ? (
         <ProfileDialog user={auth} onUpdated={setAuth} onClose={() => setShowProfileDialog(false)} />
+      ) : null}
+      {showCommandPalette && !isAdminPage ? (
+        <CommandPalette
+          plugins={visiblePlugins}
+          onClose={() => setShowCommandPalette(false)}
+          onOpenHome={() => {
+            setActivePluginId("__home");
+            setShowCommandPalette(false);
+          }}
+          onOpenPlugin={setActivePluginId}
+        />
       ) : null}
     </>
   );

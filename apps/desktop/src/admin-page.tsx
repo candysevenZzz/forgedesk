@@ -326,12 +326,15 @@ function AdminTopbar(props: { onBack: () => void; auth?: AuthUser; onSignOut?: (
               <UserRound size={15} aria-hidden="true" />
             )}
           </span>
-          <strong>{props.auth.displayName}</strong>
+          <span className="admin-account-copy">
+            <strong>{props.auth.displayName}</strong>
+            <small>管理员</small>
+          </span>
           <button
             className="icon-button"
             type="button"
             onClick={() => void props.onSignOut?.()}
-            title="退出登录"
+            data-tooltip="退出登录"
             aria-label="退出登录"
           >
             <LogOut size={16} aria-hidden="true" />

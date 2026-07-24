@@ -398,6 +398,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
   const messagesRef = useRef<RenderedMessage[]>([]);
   const messagesConversationRef = useRef("");
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const messageNodesRef = useRef(new Map<string, HTMLElement>());
   const readCursorsRef = useRef<ChatReadCursors>({});
   const pendingUnreadJumpRef = useRef("");
@@ -1166,6 +1167,10 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     if (!identity || !activeConversation || !draft.trim() || sending) {
       return;
     }
+    const conversationId = activeConversation.id;
+    const messageText = draft.trim();
+    // Clear the submitted text first, so the next message can be entered while this request is pending.
+    setDraft("");
     setSending(true);
     try {
       const deviceKeys = await deviceKeysForUsers(activeConversation.participantIds);
@@ -1178,9 +1183,9 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         await ensureGroupKeyCoverage(activeConversation, groupKey);
       }
       const payload = groupKey
-        ? await encryptGroupMessage(draft.trim(), groupKey.rawKey, groupKey.keyVersion)
-        : await encryptMessage(draft.trim(), deviceKeys);
-      const created = await sendChatMessage(activeConversation.id, payload);
+        ? await encryptGroupMessage(messageText, groupKey.rawKey, groupKey.keyVersion)
+        : await encryptMessage(messageText, deviceKeys);
+      const created = await sendChatMessage(conversationId, payload);
       const text = await decryptMessage(created, identity, groupKey?.rawKey);
       setMessages((current) => {
         if (messagesConversationRef.current !== created.conversationId) {
@@ -1190,11 +1195,15 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         messagesRef.current = merged;
         return merged;
       });
-      setDraft("");
     } catch (error) {
+      // Do not overwrite text entered during the request; restore the failed message only if the input stayed empty.
+      setDraft((current) => current || messageText);
       setStatus(error instanceof Error ? error.message : "消息发送失败");
     } finally {
       setSending(false);
+      if (activeConversationIdRef.current === conversationId) {
+        window.requestAnimationFrame(() => composerRef.current?.focus());
+      }
     }
   }
 
@@ -1252,6 +1261,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                         />
                       </strong>
                       <small>
+                        {isActive ? "正在查看 · " : ""}
                         {plaintextCompatibilityMode
                           ? "HTTP 明文兼容"
                           : participantCount > 2
@@ -1264,7 +1274,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                     <button
                       className="chat-unread-count"
                       type="button"
-                      title={`${unreadCount} 条新消息，定位到上次查看位置`}
+                      data-tooltip={`${unreadCount} 条新消息，定位到上次查看位置`}
                       aria-label={`${unreadCount} 条新消息，定位到上次查看位置`}
                       onClick={() => showUnreadMessages(conversation.id)}
                     >
@@ -1275,7 +1285,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                     <button
                       className="chat-conversation-delete"
                       type="button"
-                      title="删除会话"
+                      data-tooltip="删除会话"
                       aria-label="删除会话"
                       onClick={() => {
                         setDeleteError("");
@@ -1336,7 +1346,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                 className="icon-button"
                 type="button"
                 onClick={() => identity && void refreshMessages(activeConversation.id, identity)}
-                title="刷新消息"
+                data-tooltip="刷新消息"
                 aria-label="刷新消息"
               >
                 <RefreshCw size={16} className={loading ? "spin" : ""} aria-hidden="true" />
@@ -1380,6 +1390,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
             </div>
             <div className="chat-composer">
               <textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -1390,7 +1401,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                 }}
                 placeholder="输入消息"
                 aria-label="消息内容"
-                disabled={!identity || sending}
+                disabled={!identity}
               />
               <div>
                 <span>
@@ -1401,6 +1412,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                   className="chat-primary-button"
                   type="button"
                   disabled={!identity || !draft.trim() || sending}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => void sendMessage()}
                 >
                   {sending ? (

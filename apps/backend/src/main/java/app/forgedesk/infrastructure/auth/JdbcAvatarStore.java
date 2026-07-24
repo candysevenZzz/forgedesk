@@ -13,7 +13,9 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class JdbcAvatarStore implements AvatarStore {
 
-  private static final int MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+  // Browsers upload avatars after client-side compression. This protects the API from direct
+  // oversized requests.
+  private static final int MAX_AVATAR_BYTES = 256 * 1024;
 
   private final JdbcTemplate jdbc;
 
@@ -29,7 +31,7 @@ public class JdbcAvatarStore implements AvatarStore {
       throw new IllegalArgumentException("头像图片数据无效");
     }
     if (content.length == 0 || content.length > MAX_AVATAR_BYTES) {
-      throw new IllegalArgumentException("头像不能超过 2 MB");
+      throw new IllegalArgumentException("头像不能超过 256 KB，请使用客户端压缩后重新上传");
     }
     String contentType =
         dataUrl.startsWith("data:image/jpeg")
