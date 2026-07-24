@@ -14,10 +14,10 @@ public class ChatWebSocketConfiguration implements WebSocketConfigurer {
 
   private final ChatWebSocketHub hub;
 
+  private final ForgeDeskWebProperties webProperties;
+
   @Override
   public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-    registry
-        .addHandler(hub, "/ws/chat")
-        .setAllowedOrigins("http://127.0.0.1:1420", "http://localhost:1420");
+    registry.addHandler(hub, "/ws/chat").setAllowedOrigins(webProperties.allowedOriginsArray());
   }
 }

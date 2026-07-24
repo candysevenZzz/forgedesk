@@ -17,6 +17,7 @@ import {
 import {
   addChatGroupKeyEnvelope,
   addChatMessageKeyEnvelope,
+  assetUrl,
   chatWebSocketUrl,
   createChatConversation,
   createChatSocketTicket,
@@ -44,6 +45,8 @@ import {
   encryptGroupMessage,
   encryptMessage,
   ensureDeviceIdentity,
+  isHttpPlaintextCompatibilityMode,
+  requiresHttpPlaintextCompatibility,
   type DeviceIdentity,
 } from "../chat-crypto";
 import type { PluginContext, PluginDefinition } from "../types";
@@ -124,6 +127,42 @@ function userName(user: ChatUser | undefined, fallback = "未知成员") {
   return user?.displayName || user?.username || fallback;
 }
 
+function ChatAvatar({ user, className = "" }: { user: ChatUser; className?: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const source = user.avatarUrl ? assetUrl(user.avatarUrl) : "";
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [source]);
+
+  return (
+    <span className={`chat-user-avatar ${className}`.trim()} aria-hidden="true">
+      {source && !imageFailed ? <img src={source} alt="" onError={() => setImageFailed(true)} /> : userInitials(user)}
+    </span>
+  );
+}
+
+function ConversationAvatar({
+  conversation,
+  users,
+  currentUserId,
+}: {
+  conversation: ChatConversation;
+  users: ChatUser[];
+  currentUserId: string;
+}) {
+  const otherUserId = conversation.participantIds.find((userId) => userId !== currentUserId);
+  const otherUser = otherUserId ? users.find((user) => user.id === otherUserId) : undefined;
+  if (conversation.participantIds.length === 2 && otherUser) {
+    return <ChatAvatar user={otherUser} className="chat-conversation-avatar" />;
+  }
+  return (
+    <span className="chat-conversation-icon" aria-hidden="true">
+      {conversation.participantIds.length > 2 ? <UsersRound size={17} /> : <MessageSquareText size={17} />}
+    </span>
+  );
+}
+
 function formatMessageTime(timestamp: string) {
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime())
@@ -139,10 +178,12 @@ function ConversationTitle({
   conversation,
   users,
   currentUserId,
+  plaintextCompatibilityMode = false,
 }: {
   conversation: ChatConversation;
   users: ChatUser[];
   currentUserId: string;
+  plaintextCompatibilityMode?: boolean;
 }) {
   const otherMembers = conversation.participantIds.filter((item) => item !== currentUserId);
   const isGroup = conversation.participantIds.length > 2;
@@ -154,7 +195,9 @@ function ConversationTitle({
       ),
     )
     .join("、");
-  return <>{conversation.title || (isGroup ? "加密群聊" : fallback || "加密聊天")}</>;
+  return (
+    <>{conversation.title || (isGroup ? "群聊" : fallback || (plaintextCompatibilityMode ? "聊天" : "加密聊天"))}</>
+  );
 }
 
 function ChatUnavailable({ context }: { context: PluginContext }) {
@@ -182,12 +225,14 @@ function CreateConversationDialog({
   onCreate,
   creating,
   error,
+  plaintextCompatibilityMode,
 }: {
   users: ChatUser[];
   onClose: () => void;
   onCreate: (title: string, participantIds: string[]) => void;
   creating: boolean;
   error: string;
+  plaintextCompatibilityMode: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [title, setTitle] = useState("");
@@ -204,7 +249,7 @@ function CreateConversationDialog({
     if (!selected.length || creating) {
       return;
     }
-    const defaultTitle = group ? "加密群聊" : userName(users.find((user) => user.id === selected[0]));
+    const defaultTitle = group ? "群聊" : userName(users.find((user) => user.id === selected[0]));
     onCreate(title.trim() || defaultTitle, selected);
   }
 
@@ -213,8 +258,20 @@ function CreateConversationDialog({
       <form className="chat-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div>
-            <h2>{group ? "创建加密群聊" : "发起加密聊天"}</h2>
-            <p>消息正文会在发送设备加密，再同步到成员设备。</p>
+            <h2>
+              {group
+                ? plaintextCompatibilityMode
+                  ? "创建群聊"
+                  : "创建加密群聊"
+                : plaintextCompatibilityMode
+                  ? "发起聊天"
+                  : "发起加密聊天"}
+            </h2>
+            <p>
+              {plaintextCompatibilityMode
+                ? "当前通过 HTTP 运行，消息会以明文兼容方式同步。"
+                : "消息正文会在发送设备加密，再同步到成员设备。"}
+            </p>
           </div>
           <button className="icon-button" type="button" onClick={onClose} title="关闭" aria-label="关闭">
             <X size={16} aria-hidden="true" />
@@ -226,7 +283,7 @@ function CreateConversationDialog({
             className="text-field"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder={group ? "未填写时使用“加密群聊”" : "未填写时使用对方名称"}
+            placeholder={group ? "未填写时使用“群聊”" : "未填写时使用对方名称"}
           />
         </label>
         <div className="chat-member-picker" role="list" aria-label="选择聊天成员">
@@ -235,9 +292,7 @@ function CreateConversationDialog({
             return (
               <label className={checked ? "selected" : ""} key={user.id}>
                 <input type="checkbox" checked={checked} onChange={() => toggleUser(user.id)} />
-                <span className="chat-user-avatar" aria-hidden="true">
-                  {userInitials(user)}
-                </span>
+                <ChatAvatar user={user} />
                 <span className="chat-member-copy">
                   <strong>{userName(user)}</strong>
                   <small>{user.online ? "在线" : "离线"}</small>
@@ -297,7 +352,7 @@ function DeleteConversationDialog({
           </button>
         </header>
         <p className="chat-confirm-copy">
-          将删除“{conversation.title || "未命名会话"}”及其中全部服务端密文。此操作无法恢复。
+          将删除“{conversation.title || "未命名会话"}”及其中全部服务端消息记录。此操作无法恢复。
         </p>
         {error ? <p className="chat-dialog-error">{error}</p> : null}
         <footer>
@@ -338,8 +393,8 @@ function ChatPlugin({ context }: { context: PluginContext }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const reconnectRef = useRef<number | null>(null);
-  const manualCloseRef = useRef(false);
   const conversationsRef = useRef<ChatConversation[]>([]);
+  const activeConversationIdRef = useRef("");
   const messagesRef = useRef<RenderedMessage[]>([]);
   const messagesConversationRef = useRef("");
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -349,6 +404,8 @@ function ChatPlugin({ context }: { context: PluginContext }) {
   const scrollToLatestRef = useRef("");
   const automaticMessageScrollRef = useRef(false);
   const conversationsRequestRef = useRef<Promise<void> | null>(null);
+  const unreadCountsRequestRef = useRef<Promise<void> | null>(null);
+  const readCursorRevisionRef = useRef(0);
   const messageRequestsRef = useRef(new Set<string>());
   const unreadableRefreshTimersRef = useRef(new Map<string, number>());
   const deviceKeysCacheRef = useRef(new Map<string, ChatDeviceKey[]>());
@@ -364,15 +421,22 @@ function ChatPlugin({ context }: { context: PluginContext }) {
       displayName: context.auth.displayName,
       role: context.auth.role,
       createdAt: context.auth.createdAt,
+      avatarUrl: context.auth.avatarUrl,
       online: true,
     };
   }, [context.auth]);
   const allUsers = useMemo(() => (currentUser ? [currentUser, ...users] : users), [currentUser, users]);
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId);
+  const setupError = !identity && status !== "正在准备设备密钥...";
+  const plaintextCompatibilityMode = isHttpPlaintextCompatibilityMode();
 
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -382,6 +446,9 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     deviceKeysCacheRef.current.clear();
     groupKeysCacheRef.current.clear();
     readCursorsRef.current = context.auth ? loadReadCursors(context.auth.id) : {};
+    readCursorRevisionRef.current += 1;
+    activeConversationIdRef.current = "";
+    setActiveConversationId("");
     setUnreadCounts({});
     setUnreadAnchorMessageId("");
   }, [context.auth?.id]);
@@ -393,6 +460,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
       }
       const next = { ...readCursorsRef.current, [conversationId]: createdAt };
       readCursorsRef.current = next;
+      readCursorRevisionRef.current += 1;
       saveReadCursors(context.auth.id, next);
       setUnreadCounts((current) => {
         if (!current[conversationId]) {
@@ -412,6 +480,11 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     });
   }, []);
 
+  const activateConversation = useCallback((conversationId: string) => {
+    activeConversationIdRef.current = conversationId;
+    setActiveConversationId(conversationId);
+  }, []);
+
   const refreshConversations = useCallback(async () => {
     if (conversationsRequestRef.current) {
       return conversationsRequestRef.current;
@@ -420,12 +493,10 @@ function ChatPlugin({ context }: { context: PluginContext }) {
       const latest = await fetchChatConversations();
       conversationsRef.current = latest;
       setConversations(latest);
-      setActiveConversationId((current) => {
-        if (current && latest.some((item) => item.id === current)) {
-          return current;
-        }
-        return latest[0]?.id ?? "";
-      });
+      const activeId = activeConversationIdRef.current;
+      if (activeId && !latest.some((item) => item.id === activeId)) {
+        activateConversation("");
+      }
     })();
     conversationsRequestRef.current = request;
     try {
@@ -433,6 +504,32 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     } finally {
       if (conversationsRequestRef.current === request) {
         conversationsRequestRef.current = null;
+      }
+    }
+  }, [activateConversation]);
+
+  const refreshUnreadCounts = useCallback(async () => {
+    if (unreadCountsRequestRef.current) {
+      return unreadCountsRequestRef.current;
+    }
+    const request = (async () => {
+      // A response calculated from an older cursor must never restore a badge just cleared locally.
+      while (true) {
+        const revision = readCursorRevisionRef.current;
+        const cursors = { ...readCursorsRef.current };
+        const counts = await fetchChatUnreadCounts(cursors);
+        if (revision === readCursorRevisionRef.current) {
+          setUnreadCounts(counts);
+          return;
+        }
+      }
+    })();
+    unreadCountsRequestRef.current = request;
+    try {
+      await request;
+    } finally {
+      if (unreadCountsRequestRef.current === request) {
+        unreadCountsRequestRef.current = null;
       }
     }
   }, []);
@@ -550,7 +647,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         messagesRef.current = rendered;
         setMessages(rendered);
         const lastMessage = rendered.at(-1);
-        if (!readCursorsRef.current[conversationId] && lastMessage) {
+        if (conversationId === activeConversationIdRef.current && lastMessage) {
           saveReadCursor(conversationId, lastMessage.createdAt);
         }
         scrollToLatestRef.current = conversationId;
@@ -592,6 +689,9 @@ function ChatPlugin({ context }: { context: PluginContext }) {
               messagesRef.current = merged;
               return merged;
             });
+            if (conversationId === activeConversationIdRef.current) {
+              saveReadCursor(conversationId, rendered.at(-1)!.createdAt);
+            }
           }
           hasMore = page.hasMoreAfter && Boolean(page.nextAfter) && page.nextAfter !== after;
           after = page.nextAfter;
@@ -602,7 +702,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         messageRequestsRef.current.delete(conversationId);
       }
     },
-    [groupKeyForMessages],
+    [groupKeyForMessages, saveReadCursor],
   );
 
   const jumpToUnreadMessages = useCallback(
@@ -658,7 +758,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
 
   const migrateHistoryToKnownDevices = useCallback(
     async (currentIdentity: DeviceIdentity, sourceConversations: ChatConversation[]) => {
-      if (!context.auth || !sourceConversations.length) {
+      if (!context.auth || !sourceConversations.length || isHttpPlaintextCompatibilityMode()) {
         return 0;
       }
       const devices = await deviceKeysForUsers([context.auth.id]);
@@ -720,6 +820,8 @@ function ChatPlugin({ context }: { context: PluginContext }) {
       setIdentity(null);
       setConversations([]);
       setUsers([]);
+      activeConversationIdRef.current = "";
+      setActiveConversationId("");
       messagesConversationRef.current = "";
       messagesRef.current = [];
       setMessages([]);
@@ -741,11 +843,19 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         setUsers(latestUsers);
         setConversations(latestConversations);
         setUnreadCounts(latestUnreadCounts);
-        setActiveConversationId((current) => current || latestConversations[0]?.id || "");
+        if (!activeConversationIdRef.current) {
+          activateConversation(latestConversations[0]?.id ?? "");
+        }
         const migratedCount = await migrateHistoryToKnownDevices(nextIdentity, latestConversations);
         if (!cancelled) {
           setIdentity(nextIdentity);
-          setStatus(migratedCount ? `已为新设备迁移 ${migratedCount} 条历史消息` : "设备已就绪");
+          setStatus(
+            isHttpPlaintextCompatibilityMode()
+              ? "HTTP 明文兼容模式已启用，消息内容不具备端到端加密保护"
+              : migratedCount
+                ? `已为新设备迁移 ${migratedCount} 条历史消息`
+                : "设备已就绪",
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -757,7 +867,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     return () => {
       cancelled = true;
     };
-  }, [context.auth, enabled, migrateHistoryToKnownDevices]);
+  }, [activateConversation, context.auth, enabled, migrateHistoryToKnownDevices]);
 
   useEffect(() => {
     if (!identity || !activeConversationId) {
@@ -794,12 +904,12 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     const connectedIdentity = identity;
     let socket: WebSocket | null = null;
     let attempts = 0;
-    manualCloseRef.current = false;
+    let disposed = false;
 
     function connect() {
       void createChatSocketTicket()
         .then(({ ticket }) => {
-          if (manualCloseRef.current) {
+          if (disposed) {
             return;
           }
           socket = new WebSocket(chatWebSocketUrl(ticket));
@@ -811,7 +921,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         });
     }
     function scheduleReconnect() {
-      if (manualCloseRef.current) {
+      if (disposed) {
         return;
       }
       attempts += 1;
@@ -820,10 +930,16 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     }
     function bindSocket(nextSocket: WebSocket) {
       nextSocket.onopen = () => {
+        if (disposed) {
+          nextSocket.close();
+          return;
+        }
         attempts = 0;
         setStatus("实时同步已连接");
-        if (activeConversationId) {
-          void refreshMessages(activeConversationId, connectedIdentity);
+        void refreshUnreadCounts();
+        const activeId = activeConversationIdRef.current;
+        if (activeId) {
+          void refreshMessages(activeId, connectedIdentity);
         }
       };
       nextSocket.onmessage = (event) => {
@@ -877,12 +993,9 @@ function ChatPlugin({ context }: { context: PluginContext }) {
             return updated;
           });
           if (payload.senderId !== context.auth?.id) {
-            setUnreadCounts((current) => ({
-              ...current,
-              [payload.conversationId]: (current[payload.conversationId] ?? 0) + 1,
-            }));
+            void refreshUnreadCounts();
           }
-          if (payload.conversationId === activeConversationId) {
+          if (payload.conversationId === activeConversationIdRef.current) {
             void refreshNewMessages(payload.conversationId, connectedIdentity);
           }
           return;
@@ -906,7 +1019,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
             conversationsRef.current = updated;
             return updated;
           });
-          if (payload.conversationId === activeConversationId) {
+          if (payload.conversationId === activeConversationIdRef.current) {
             if (messagesRef.current.some((message) => message.unreadable)) {
               scheduleUnreadableMessageRefresh(payload.conversationId, connectedIdentity);
             } else {
@@ -916,9 +1029,12 @@ function ChatPlugin({ context }: { context: PluginContext }) {
           return;
         }
         if (payload.type === "conversation-deleted") {
+          const wasActive = activeConversationIdRef.current === payload.conversationId;
           setConversations((current) => current.filter((item) => item.id !== payload.conversationId));
-          setActiveConversationId((current) => (current === payload.conversationId ? "" : current));
-          if (payload.conversationId === activeConversationId) {
+          if (wasActive) {
+            activateConversation("");
+          }
+          if (wasActive) {
             messagesConversationRef.current = "";
             messagesRef.current = [];
             setMessages([]);
@@ -927,7 +1043,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         }
       };
       nextSocket.onclose = () => {
-        if (!manualCloseRef.current) {
+        if (!disposed) {
           scheduleReconnect();
           setStatus("实时连接已断开，正在重连...");
         }
@@ -935,7 +1051,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     }
     connect();
     return () => {
-      manualCloseRef.current = true;
+      disposed = true;
       if (reconnectRef.current !== null) {
         window.clearTimeout(reconnectRef.current);
       }
@@ -944,25 +1060,25 @@ function ChatPlugin({ context }: { context: PluginContext }) {
       socket?.close();
     };
   }, [
-    activeConversationId,
     enabled,
     identity,
     migrateHistoryToKnownDevices,
     refreshConversations,
     refreshMessages,
     refreshNewMessages,
+    refreshUnreadCounts,
     scheduleUnreadableMessageRefresh,
   ]);
 
   function selectConversation(conversationId: string) {
-    if (activeConversationId && activeConversationId !== conversationId && !unreadCounts[activeConversationId]) {
+    if (activeConversationId && activeConversationId !== conversationId) {
       const lastMessage = messagesRef.current.at(-1);
       if (lastMessage) {
         saveReadCursor(activeConversationId, lastMessage.createdAt);
       }
     }
     setUnreadAnchorMessageId("");
-    setActiveConversationId(conversationId);
+    activateConversation(conversationId);
   }
 
   function showUnreadMessages(conversationId: string) {
@@ -1001,7 +1117,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     try {
       const created = await createChatConversation({ title, participantIds });
       await refreshConversations();
-      setActiveConversationId(created.id);
+      activateConversation(created.id);
       setShowCreateDialog(false);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "无法创建聊天");
@@ -1019,7 +1135,9 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     try {
       await deleteChatConversation(deleteTarget.id);
       setConversations((current) => current.filter((item) => item.id !== deleteTarget.id));
-      setActiveConversationId((current) => (current === deleteTarget.id ? "" : current));
+      if (activeConversationIdRef.current === deleteTarget.id) {
+        activateConversation("");
+      }
       if (activeConversationId === deleteTarget.id) {
         messagesConversationRef.current = "";
         messagesRef.current = [];
@@ -1050,14 +1168,18 @@ function ChatPlugin({ context }: { context: PluginContext }) {
     }
     setSending(true);
     try {
+      const deviceKeys = await deviceKeysForUsers(activeConversation.participantIds);
+      const needsPlaintextCompatibility = requiresHttpPlaintextCompatibility(deviceKeys);
       const groupKey =
-        activeConversation.participantIds.length > 2 ? await ensureGroupKey(activeConversation, identity) : null;
+        !needsPlaintextCompatibility && activeConversation.participantIds.length > 2
+          ? await ensureGroupKey(activeConversation, identity)
+          : null;
       if (groupKey) {
         await ensureGroupKeyCoverage(activeConversation, groupKey);
       }
       const payload = groupKey
         ? await encryptGroupMessage(draft.trim(), groupKey.rawKey, groupKey.keyVersion)
-        : await encryptMessage(draft.trim(), await deviceKeysForUsers(activeConversation.participantIds));
+        : await encryptMessage(draft.trim(), deviceKeys);
       const created = await sendChatMessage(activeConversation.id, payload);
       const text = await decryptMessage(created, identity, groupKey?.rawKey);
       setMessages((current) => {
@@ -1100,61 +1222,73 @@ function ChatPlugin({ context }: { context: PluginContext }) {
           </button>
         </header>
         <div className="chat-conversation-list">
-          {conversations.map((conversation) => {
-            const isActive = conversation.id === activeConversationId;
-            const participantCount = conversation.participantIds.length;
-            const canDelete = conversation.createdBy === context.auth!.id;
-            const unreadCount = unreadCounts[conversation.id] ?? 0;
-            return (
-              <div className="chat-conversation-row" key={conversation.id}>
-                <button
-                  className={isActive ? "chat-conversation active" : "chat-conversation"}
-                  type="button"
-                  onClick={() => selectConversation(conversation.id)}
-                >
-                  <span className="chat-conversation-icon" aria-hidden="true">
-                    {participantCount > 2 ? <UsersRound size={17} /> : <MessageSquareText size={17} />}
-                  </span>
-                  <span>
-                    <strong>
-                      <ConversationTitle
-                        conversation={conversation}
-                        users={allUsers}
-                        currentUserId={context.auth!.id}
-                      />
-                    </strong>
-                    <small>{participantCount > 2 ? `${participantCount} 位成员` : "端到端加密"}</small>
-                  </span>
-                </button>
-                {unreadCount ? (
+          {setupError ? (
+            <div className="chat-setup-error" role="alert">
+              <LockKeyhole size={16} aria-hidden="true" />
+              <span>{status}</span>
+            </div>
+          ) : null}
+          {!setupError &&
+            conversations.map((conversation) => {
+              const isActive = conversation.id === activeConversationId;
+              const participantCount = conversation.participantIds.length;
+              const canDelete = conversation.createdBy === context.auth!.id;
+              const unreadCount = unreadCounts[conversation.id] ?? 0;
+              return (
+                <div className="chat-conversation-row" key={conversation.id}>
                   <button
-                    className="chat-unread-count"
+                    className={isActive ? "chat-conversation active" : "chat-conversation"}
                     type="button"
-                    title={`${unreadCount} 条新消息，定位到上次查看位置`}
-                    aria-label={`${unreadCount} 条新消息，定位到上次查看位置`}
-                    onClick={() => showUnreadMessages(conversation.id)}
+                    onClick={() => selectConversation(conversation.id)}
                   >
-                    {unreadLabel(unreadCount)}
+                    <ConversationAvatar conversation={conversation} users={allUsers} currentUserId={context.auth!.id} />
+                    <span>
+                      <strong>
+                        <ConversationTitle
+                          conversation={conversation}
+                          users={allUsers}
+                          currentUserId={context.auth!.id}
+                          plaintextCompatibilityMode={plaintextCompatibilityMode}
+                        />
+                      </strong>
+                      <small>
+                        {plaintextCompatibilityMode
+                          ? "HTTP 明文兼容"
+                          : participantCount > 2
+                            ? `${participantCount} 位成员`
+                            : "端到端加密"}
+                      </small>
+                    </span>
                   </button>
-                ) : null}
-                {canDelete ? (
-                  <button
-                    className="chat-conversation-delete"
-                    type="button"
-                    title="删除会话"
-                    aria-label="删除会话"
-                    onClick={() => {
-                      setDeleteError("");
-                      setDeleteTarget(conversation);
-                    }}
-                  >
-                    <Trash2 size={15} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-          {!conversations.length ? (
+                  {unreadCount ? (
+                    <button
+                      className="chat-unread-count"
+                      type="button"
+                      title={`${unreadCount} 条新消息，定位到上次查看位置`}
+                      aria-label={`${unreadCount} 条新消息，定位到上次查看位置`}
+                      onClick={() => showUnreadMessages(conversation.id)}
+                    >
+                      {unreadLabel(unreadCount)}
+                    </button>
+                  ) : null}
+                  {canDelete ? (
+                    <button
+                      className="chat-conversation-delete"
+                      type="button"
+                      title="删除会话"
+                      aria-label="删除会话"
+                      onClick={() => {
+                        setDeleteError("");
+                        setDeleteTarget(conversation);
+                      }}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          {!setupError && !conversations.length ? (
             <div className="chat-list-empty">
               <MessagesSquare size={20} aria-hidden="true" />
               <p>{users.length ? "还没有会话" : "暂无其他已注册用户"}</p>
@@ -1176,13 +1310,16 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                     conversation={activeConversation}
                     users={allUsers}
                     currentUserId={context.auth!.id}
+                    plaintextCompatibilityMode={plaintextCompatibilityMode}
                   />
                 </h2>
                 <span>
                   <LockKeyhole size={12} aria-hidden="true" />
-                  {activeConversation.participantIds.length > 2
-                    ? `${activeConversation.participantIds.length} 位成员，端到端加密`
-                    : "端到端加密"}
+                  {plaintextCompatibilityMode
+                    ? "HTTP 明文兼容模式"
+                    : activeConversation.participantIds.length > 2
+                      ? `${activeConversation.participantIds.length} 位成员，端到端加密`
+                      : "端到端加密"}
                 </span>
               </div>
               {unreadCounts[activeConversation.id] ? (
@@ -1206,7 +1343,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
               </button>
             </header>
             <div className="chat-message-list" ref={messageListRef} aria-live="polite" onScroll={handleMessageScroll}>
-              {loading ? <div className="chat-loading">正在读取密文消息...</div> : null}
+              {loading ? <div className="chat-loading">正在读取消息...</div> : null}
               {!loading && !messages.length ? <div className="chat-loading">还没有消息</div> : null}
               {messages.map((message) => {
                 const isSelf = message.senderId === context.auth!.id;
@@ -1226,9 +1363,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
                         }
                       }}
                     >
-                      <span className="chat-user-avatar" aria-hidden="true">
-                        {sender ? userInitials(sender) : <CircleUserRound size={16} />}
-                      </span>
+                      {sender ? <ChatAvatar user={sender} /> : <CircleUserRound size={30} aria-hidden="true" />}
                       <div>
                         <header>
                           <strong>{isSelf ? "我" : userName(sender)}</strong>
@@ -1260,7 +1395,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
               <div>
                 <span>
                   <LockKeyhole size={12} aria-hidden="true" />
-                  仅同步密文
+                  {plaintextCompatibilityMode ? "HTTP 明文兼容模式" : "仅同步密文"}
                 </span>
                 <button
                   className="chat-primary-button"
@@ -1281,17 +1416,21 @@ function ChatPlugin({ context }: { context: PluginContext }) {
         ) : (
           <div className="chat-empty-main">
             <MessagesSquare size={28} aria-hidden="true" />
-            <h2>选择一个会话开始聊天</h2>
+            <h2>{setupError ? "无法启用端到端聊天" : "选择一个会话开始聊天"}</h2>
             <p>
-              {users.length
-                ? "消息会在当前设备加密，并以密文方式同步到会话成员的设备。"
-                : "请先使用另一个账号注册并登录，再创建一对一或群聊会话。"}
+              {setupError
+                ? status
+                : plaintextCompatibilityMode
+                  ? "当前通过 HTTP 运行，聊天内容以明文兼容方式同步。"
+                  : users.length
+                    ? "消息会在当前设备加密，并以密文方式同步到会话成员的设备。"
+                    : "请先使用另一个账号注册并登录，再创建一对一或群聊会话。"}
             </p>
             <button
               className="chat-primary-button"
               type="button"
               onClick={openCreateDialog}
-              disabled={!identity || !users.length}
+              disabled={setupError || !identity || !users.length}
             >
               <Plus size={16} aria-hidden="true" />
               新建聊天
@@ -1308,6 +1447,7 @@ function ChatPlugin({ context }: { context: PluginContext }) {
           users={users}
           creating={creating}
           error={createError}
+          plaintextCompatibilityMode={plaintextCompatibilityMode}
           onClose={() => {
             setShowCreateDialog(false);
             setCreateError("");
@@ -1335,8 +1475,8 @@ function ChatPlugin({ context }: { context: PluginContext }) {
 
 export const chatPlugin: PluginDefinition = {
   id: "encrypted-chat",
-  name: "加密聊天",
-  description: "以设备密钥封装消息，支持一对一聊天、群聊和实时密文同步。",
+  name: "聊天",
+  description: "支持一对一聊天、群聊与实时同步；安全上下文中启用端到端加密。",
   icon: MessagesSquare,
   category: "协作",
   shortcuts: ["chat", "message"],

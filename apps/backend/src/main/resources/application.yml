@@ -1,5 +1,5 @@
 server:
-  port: 8088
+  port: 8080
   address: ${FORGEDESK_BIND_ADDRESS:127.0.0.1}
 
 debug: false
@@ -7,9 +7,30 @@ debug: false
 spring:
   application:
     name: forgedesk-backend
+  datasource:
+    url: ${FORGEDESK_DB_URL:jdbc:mysql://127.0.0.1:3306/forgedesk?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${FORGEDESK_DB_USERNAME:forgedesk}
+    password: ${FORGEDESK_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${FORGEDESK_DB_POOL_SIZE:10}
+      minimum-idle: ${FORGEDESK_DB_MIN_IDLE:2}
+      connection-timeout: 5000
+  data:
+    redis:
+      host: ${FORGEDESK_REDIS_HOST:127.0.0.1}
+      port: ${FORGEDESK_REDIS_PORT:6379}
+      password: ${FORGEDESK_REDIS_PASSWORD:}
+      timeout: 3s
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
 
 forgedesk:
   time-zone: ${FORGEDESK_TIME_ZONE:Asia/Shanghai}
+  web:
+    allowed-origins: ${FORGEDESK_ALLOWED_ORIGINS:http://localhost:1420,http://127.0.0.1:1420}
 
 logging:
   pattern:

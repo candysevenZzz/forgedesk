@@ -1,10 +1,14 @@
 package app.forgedesk.domain.auth;
 
-import java.util.List;
+import java.util.Optional;
 
 public interface UserSessionRepository {
 
-  List<UserSession> findAll();
+  void save(UserSession session);
 
-  void replaceAll(List<UserSession> sessions);
+  Optional<UserSession> findByTokenHash(String tokenHash);
+
+  void remove(String tokenHash);
+
+  int activeCount();
 }

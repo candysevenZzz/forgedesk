@@ -1,6 +1,7 @@
 import type { WorkNotesArchive } from "./work-notes-storage";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8088";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8080" : window.location.origin);
 let accessToken = "";
 type ApiResult<T> = { code: string; message: string; data: T; traceId: string };
 
@@ -226,6 +227,7 @@ export type ChatUser = {
   displayName: string;
   role: "ADMIN" | "USER";
   createdAt: string;
+  avatarUrl: string;
   online: boolean;
 };
 

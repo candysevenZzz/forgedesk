@@ -16,6 +16,8 @@
     "dev:web:full": "bash ./scripts/dev-web.sh --with-backend",
     "dev:desktop": "bash ./scripts/dev-desktop.sh",
     "build:web": "npm --workspace apps/desktop run build",
+    "build:server": "bash ./scripts/deploy/build-artifact.sh",
+    "deploy:server": "bash ./scripts/deploy/deploy-server.sh",
     "backend:dev": "bash ./scripts/maven.sh -f apps/backend/pom.xml spring-boot:run",
     "backend:test": "bash ./scripts/maven.sh -f apps/backend/pom.xml test",
     "lint:web": "eslint apps/desktop/src",

@@ -1,8 +1,8 @@
-# 加密聊天接口说明
+# 聊天接口说明
 
 ## 通用约定
 
-- 基础地址：`http://127.0.0.1:8088`
+- 基础地址：`http://127.0.0.1:8080`
 - 除登录、注册和健康检查外，REST 接口需要 `Authorization: Bearer <token>`。
 - `@RequireLogin` 由登录切面统一处理；Controller 不自行解析令牌。
 - 所有 REST 成功与失败响应均由统一结构包装：
@@ -33,7 +33,7 @@
 }
 ```
 
-### 加密消息
+### 消息负载
 
 ```json
 {
@@ -48,7 +48,9 @@
 }
 ```
 
-消息正文不应提交给服务端。对于一对一会话，`keyEnvelopes` 覆盖每台成员设备；对于已初始化群会话密钥的群聊，普通消息的 `keyEnvelopes` 为空，只携带对应 `keyVersion`。
+在 HTTPS 或 `localhost` 安全上下文中，消息正文不应以明文提交给服务端。对于一对一会话，`keyEnvelopes` 覆盖每台成员设备；对于已初始化群会话密钥的群聊，普通消息的 `keyEnvelopes` 为空，只携带对应 `keyVersion`。
+
+公网 HTTP 环境无法使用浏览器 Web Crypto，客户端会使用 `forgedesk-http-plain-v1:` 前缀的兼容负载，并将 `nonce` 与信封值标记为 `forgedesk-http-plain-v1`。该格式不是密文，服务端仍按同一消息接口存储和分发。不要将 HTTP 兼容模式用于需要保密的内容。
 
 ### 群会话密钥
 
@@ -134,9 +136,9 @@ DELETE /api/chat/conversations/{conversationId}
 Authorization: Bearer <token>
 ```
 
-只能由会话创建者调用。成功后返回被删除的会话元数据，服务端会删除对应消息密文文件，并对所有成员推送 `conversation-deleted`。这不是软删除，不能恢复。
+只能由会话创建者调用。成功后返回被删除的会话元数据，服务端会删除 MySQL 中对应会话、消息和密钥信封，并对所有成员推送 `conversation-deleted`。这不是软删除，不能恢复。
 
-### 发送加密消息
+### 发送消息
 
 ```http
 POST /api/chat/conversations/{conversationId}/messages
@@ -154,7 +156,7 @@ Content-Type: application/json
 }
 ```
 
-服务端只检查请求者是成员、密文字段有效且信封覆盖所有已登记成员设备。单条密文上限为 1 MB。
+服务端只检查请求者是成员、消息字段有效且信封覆盖所有已登记成员设备。单条消息负载上限为 1 MB。安全上下文的消息为密文；HTTP 明文兼容模式的消息不具备端到端加密保护。
 
 群聊在成功初始化群会话密钥后，普通消息使用以下负载：
 
@@ -223,17 +225,17 @@ Content-Type: application/json
 连接步骤：
 
 1. 调用 `POST /api/chat/socket-ticket` 获取 Ticket。
-2. 在 1 分钟内连接 `ws://127.0.0.1:8088/ws/chat?ticket=<ticket>`。
+2. 在 1 分钟内连接 `ws://127.0.0.1:8080/ws/chat?ticket=<ticket>`。
 3. Ticket 仅可使用一次；不可把长期登录 Token 放在 URL 上。
 
 服务端事件：
 
-| 类型                   | 字段                                      | 客户端行为                                          |
-| ---------------------- | ----------------------------------------- | --------------------------------------------------- |
-| `ready`                | `onlineUserIds`                           | 初始化在线联系人状态                                |
-| `presence-changed`     | `userId`、`online`                        | 更新单个用户在线状态                                |
-| `conversation-changed` | `conversationId`、`createdAt`             | 已知会话仅更新本地排序；当前会话按 `after` 增量拉取 |
-| `conversation-deleted` | `conversationId`、`deletedAt`             | 从列表和当前视图移除会话                            |
-| `message-created`      | `conversationId`、`senderId`、`createdAt` | 更新会话排序，并为非发送者增量增加未读数量          |
-| `device-changed`       | `userId`                                  | 仅通知受影响会话成员；失效该用户的设备公钥缓存      |
-| `signal`               | `fromUserId`、`payload`                   | 为未来点对点协商预留，当前消息同步未使用            |
+| 类型                   | 字段                                      | 客户端行为                                               |
+| ---------------------- | ----------------------------------------- | -------------------------------------------------------- |
+| `ready`                | `onlineUserIds`                           | 初始化在线联系人状态                                     |
+| `presence-changed`     | `userId`、`online`                        | 更新单个用户在线状态                                     |
+| `conversation-changed` | `conversationId`、`createdAt`             | 已知会话仅更新本地排序；当前会话按 `after` 增量拉取      |
+| `conversation-deleted` | `conversationId`、`deletedAt`             | 从列表和当前视图移除会话                                 |
+| `message-created`      | `conversationId`、`senderId`、`createdAt` | 更新会话排序；客户端用本地阅读游标向服务端批量刷新未读数 |
+| `device-changed`       | `userId`                                  | 仅通知受影响会话成员；失效该用户的设备公钥缓存           |
+| `signal`               | `fromUserId`、`payload`                   | 为未来点对点协商预留，当前消息同步未使用                 |

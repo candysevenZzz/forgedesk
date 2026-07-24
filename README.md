@@ -18,7 +18,9 @@ forgedesk
 │   ├── backend      # Spring Boot 后端
 │   └── desktop      # Tauri + React 平台壳
 ├── docs             # 架构、运行、部署文档
-├── scripts          # 本地开发脚本
+├── scripts
+│   ├── deploy        # 服务器构建、上传、回滚脚本与说明
+│   └── ...           # 本地开发脚本
 └── package.json     # 前端工作区和常用命令
 ```
 
@@ -78,6 +80,8 @@ npm run dev:desktop
 - `npm run dev:web:full`：前台启动前端，同时拉起后端
 - `npm run dev:desktop`：启动 Tauri 桌面应用（会先检查 Rust 环境）
 - `npm run build:web`：构建前端资源
+- `npm run build:server`：在本机生成可上传的前后端发布包，不连接服务器
+- `npm run deploy:server`：构建、上传、服务器切换、健康检查与失败回滚
 - `npm run backend:dev`：启动 Java 后端
 - `npm run check`：前端类型检查 + 后端测试
 
@@ -95,12 +99,30 @@ npm run dev:desktop
 - 切换到“服务”模式时会先请求健康检查；连接失败会保留本地模式。
 - 工作笔记始终先保存到本机应用数据目录。服务模式下才会自动合并笔记，也可以手动触发同步。
 - 合并按单条笔记的 `updatedAt` 处理；删除会保留墓碑记录，防止旧设备在下一次同步时恢复已删除笔记。
-- 同步请求失败不会覆盖或删除本地内容。服务端归档按用户写入 `~/.forgedesk/server/users/<user-id>/work-notes.json`，不进入 Git。
+- 同步请求失败不会覆盖或删除本地内容。服务端归档按用户隔离后写入 MySQL，不进入 Git。
+
+## 服务器发布
+
+当前 1Panel OpenResty + `java21` 容器环境可使用一键发布。首次配置：
+
+```bash
+mkdir -p .forgedesk
+cp scripts/deploy/deploy.env.example .forgedesk/deploy.env
+```
+
+在 `.forgedesk/deploy.env` 中填写服务器公网 IP、SSH 用户和本机私钥绝对路径。以后发布：
+
+```bash
+npm run deploy:server
+```
+
+这条命令会本机构建、上传、在服务器备份旧版、切换前端和后端、重启 Java 容器并等待健康检查；失败会自动回滚。详细步骤见 [服务器发布脚本说明](./scripts/deploy/README.md)。
 
 ## 文档导航
 
 - [架构说明](./docs/architecture.md)
 - [启动与部署](./docs/run-and-deploy.md)
-- [加密聊天架构](./docs/chat-architecture.md)
-- [加密聊天接口](./docs/chat-api.md)
+- [聊天架构](./docs/chat-architecture.md)
+- [聊天接口](./docs/chat-api.md)
+- [服务器发布脚本说明](./scripts/deploy/README.md)
 - [仓库规则](./AGENTS.md)

@@ -18,6 +18,8 @@ public interface ChatRepository {
 
   void appendMessage(EncryptedChatMessage message);
 
+  Optional<EncryptedChatMessage> findMessage(String conversationId, String messageId);
+
   void mergeMessageKeyEnvelope(
       String conversationId, String messageId, String deviceId, String keyEnvelope);
 

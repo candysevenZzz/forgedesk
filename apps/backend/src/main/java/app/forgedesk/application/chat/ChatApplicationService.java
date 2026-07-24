@@ -226,9 +226,8 @@ public class ChatApplicationService {
       throw new ChatException("目标设备不属于该聊天成员");
     }
     EncryptedChatMessage message =
-        repository.messagesAfter(conversationId, "").stream()
-            .filter(item -> item.id().equals(messageId))
-            .findFirst()
+        repository
+            .findMessage(conversationId, messageId)
             .orElseThrow(() -> new ChatException("聊天消息不存在"));
     if (message.keyEnvelopes().containsKey(deviceId)) {
       return message;
@@ -268,8 +267,16 @@ public class ChatApplicationService {
                     item.displayName(),
                     item.role(),
                     item.createdAt(),
+                    avatarUrl(item),
                     onlineUserIds.contains(item.id())))
         .toList();
+  }
+
+  private String avatarUrl(app.forgedesk.domain.auth.UserSummary user) {
+    if (blank(user.avatarVersion())) {
+      return "";
+    }
+    return "/api/auth/avatars/" + user.id() + "?v=" + user.avatarVersion();
   }
 
   private ChatConversation requireMember(String userId, String conversationId) {

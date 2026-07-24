@@ -6,4 +6,5 @@ public record ChatUser(
     String displayName,
     String role,
     String createdAt,
+    String avatarUrl,
     boolean online) {}

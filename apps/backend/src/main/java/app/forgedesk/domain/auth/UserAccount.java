@@ -11,6 +11,6 @@ public record UserAccount(
     String avatarVersion) {
 
   public UserSummary summary() {
-    return new UserSummary(id, username, displayName, role, createdAt);
+    return new UserSummary(id, username, displayName, role, createdAt, avatarVersion);
   }
 }

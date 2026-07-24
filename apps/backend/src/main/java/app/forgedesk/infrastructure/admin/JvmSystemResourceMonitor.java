@@ -12,8 +12,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class JvmSystemResourceMonitor implements SystemResourceMonitor {
 
-  private final Path serverDirectory =
-      Path.of(System.getProperty("user.home"), ".forgedesk", "server");
+  private final Path applicationDirectory = Path.of(System.getProperty("user.dir"));
 
   @Override
   public SystemResources snapshot() {
@@ -32,11 +31,10 @@ public class JvmSystemResourceMonitor implements SystemResourceMonitor {
 
   private Disk disk() {
     try {
-      Files.createDirectories(serverDirectory);
-      FileStore fileStore = Files.getFileStore(serverDirectory);
+      FileStore fileStore = Files.getFileStore(applicationDirectory);
       long total = fileStore.getTotalSpace();
       long usable = fileStore.getUsableSpace();
-      return new Disk(serverDirectory.toString(), total, Math.max(0, total - usable), usable);
+      return new Disk(applicationDirectory.toString(), total, Math.max(0, total - usable), usable);
     } catch (IOException exception) {
       throw new IllegalStateException("无法读取服务目录所在磁盘状态", exception);
     }

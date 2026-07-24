@@ -77,21 +77,15 @@ public class AuthApplicationService {
     return createSession(account);
   }
 
-  public synchronized UserIdentity requireUser(String token) {
+  public UserIdentity requireUser(String token) {
     if (token == null || token.isBlank()) {
       throw unauthorized();
     }
-    Instant now = clock.instant();
     String fingerprint = tokens.fingerprint(token);
-    List<UserSession> existing = sessions.findAll();
-    List<UserSession> active = existing.stream().filter(session -> isActive(session, now)).toList();
-    if (active.size() != existing.size()) {
-      sessions.replaceAll(active);
-    }
     UserSession session =
-        active.stream()
-            .filter(item -> tokens.equals(item.tokenHash(), fingerprint))
-            .findFirst()
+        sessions
+            .findByTokenHash(fingerprint)
+            .filter(item -> isActive(item, clock.instant()))
             .orElseThrow(this::unauthorized);
     UserAccount account = accounts.findById(session.userId()).orElseThrow(this::unauthorized);
     return identity(account);
@@ -105,15 +99,12 @@ public class AuthApplicationService {
     return user;
   }
 
-  public synchronized void logout(String token) {
+  public void logout(String token) {
     if (token == null || token.isBlank()) {
       return;
     }
     String fingerprint = tokens.fingerprint(token);
-    sessions.replaceAll(
-        sessions.findAll().stream()
-            .filter(session -> !tokens.equals(session.tokenHash(), fingerprint))
-            .toList());
+    sessions.remove(fingerprint);
   }
 
   public List<UserSummary> usersForAdmin() {
@@ -121,8 +112,7 @@ public class AuthApplicationService {
   }
 
   public int activeSessionCount() {
-    Instant now = clock.instant();
-    return (int) sessions.findAll().stream().filter(session -> isActive(session, now)).count();
+    return sessions.activeCount();
   }
 
   public synchronized UserIdentity updateProfile(String userId, String displayName) {
@@ -188,14 +178,12 @@ public class AuthApplicationService {
   private AuthResult createSession(UserAccount account) {
     String token = tokens.nextToken(32);
     Instant now = clock.instant();
-    List<UserSession> all = new java.util.ArrayList<>(sessions.findAll());
-    all.add(
+    sessions.save(
         new UserSession(
             tokens.fingerprint(token),
             account.id(),
             clock.format(now),
             clock.format(now.plus(SESSION_LIFETIME))));
-    sessions.replaceAll(all);
     return new AuthResult(token, identity(account));
   }
 
