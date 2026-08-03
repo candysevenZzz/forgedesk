@@ -16,12 +16,19 @@ public class WorkNotesSyncApplicationService {
   private final WorkNotesArchiveMerger merger;
 
   public synchronized ObjectNode sync(String userId, JsonNode clientArchive) {
-    ObjectNode merged = merger.merge(archiveStore.load(userId), clientArchive);
-    archiveStore.save(userId, merged);
+    java.util.Optional<ObjectNode> storedArchive = archiveStore.find(userId);
+    ObjectNode merged = merger.merge(storedArchive.orElse(null), clientArchive);
+    if (storedArchive.isPresent() || hasEntries(merged)) {
+      archiveStore.save(userId, merged);
+    }
     return merged;
   }
 
   public long archiveCount() {
     return archiveStore.archiveCount();
+  }
+
+  private boolean hasEntries(ObjectNode archive) {
+    return archive.path("days").size() > 0 || archive.path("tombstones").size() > 0;
   }
 }

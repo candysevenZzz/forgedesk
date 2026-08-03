@@ -22,15 +22,19 @@ public class JdbcWorkNotesArchiveStore implements WorkNotesArchiveStore {
 
   @Override
   public ObjectNode load(String userId) {
-    Optional<String> archive =
-        jdbc
-            .query(
-                "SELECT CAST(archive AS CHAR) FROM work_note_archives WHERE user_id = ?",
-                (resultSet, rowNum) -> resultSet.getString(1),
-                userId)
-            .stream()
-            .findFirst();
-    return archive.map(this::parse).orElseGet(this::emptyArchive);
+    return find(userId).orElseGet(this::emptyArchive);
+  }
+
+  @Override
+  public Optional<ObjectNode> find(String userId) {
+    return jdbc
+        .query(
+            "SELECT CAST(archive AS CHAR) FROM work_note_archives WHERE user_id = ?",
+            (resultSet, rowNum) -> resultSet.getString(1),
+            userId)
+        .stream()
+        .findFirst()
+        .map(this::parse);
   }
 
   @Override

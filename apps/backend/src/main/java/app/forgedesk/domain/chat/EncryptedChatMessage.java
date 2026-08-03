@@ -1,7 +1,5 @@
 package app.forgedesk.domain.chat;
 
-import java.util.Map;
-
 public record EncryptedChatMessage(
     String id,
     String conversationId,
@@ -9,5 +7,4 @@ public record EncryptedChatMessage(
     String ciphertext,
     String nonce,
     int keyVersion,
-    Map<String, String> keyEnvelopes,
     String createdAt) {}

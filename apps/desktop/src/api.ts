@@ -201,6 +201,34 @@ export type AdminSystemStatus = {
   userStorage: { userId: string; fileCount: number; sizeBytes: number; updatedAt: string }[];
 };
 
+export type AdminChatOverview = {
+  conversationCount: number;
+  groupCount: number;
+  directConversationCount: number;
+  messageCount: number;
+  todayMessageCount: number;
+};
+
+export type AdminConversationRecord = {
+  id: string;
+  title: string;
+  memberCount: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  ciphertextBytes: number;
+  lastMessageAt: string;
+};
+
+export type AdminChatMessageRecord = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  ciphertextBytes: number;
+  createdAt: string;
+};
+
 export function fetchAdminOverview(): Promise<AdminOverview> {
   return jsonRequest<AdminOverview>("/api/admin/overview", undefined, true);
 }
@@ -217,6 +245,18 @@ export function fetchAdminSystem(): Promise<AdminSystemStatus> {
   return jsonRequest<AdminSystemStatus>("/api/admin/system", undefined, true);
 }
 
+export function fetchAdminChatOverview(): Promise<AdminChatOverview> {
+  return jsonRequest<AdminChatOverview>("/api/admin/chat/overview", undefined, true);
+}
+
+export function fetchAdminChatConversations(): Promise<AdminConversationRecord[]> {
+  return jsonRequest<AdminConversationRecord[]>("/api/admin/chat/conversations", undefined, true);
+}
+
+export function fetchAdminChatMessages(): Promise<AdminChatMessageRecord[]> {
+  return jsonRequest<AdminChatMessageRecord[]>("/api/admin/chat/messages", undefined, true);
+}
+
 export function fetchHealth(): Promise<{ status: string; checkedAt: string }> {
   return request<{ status: string; checkedAt: string }>("/api/health");
 }
@@ -231,23 +271,10 @@ export type ChatUser = {
   online: boolean;
 };
 
-export type ChatDeviceKey = {
-  deviceId: string;
-  userId: string;
-  publicKeyJwk: string;
-  updatedAt: string;
-};
-
-export type ChatGroupKey = {
-  conversationId: string;
-  keyVersion: number;
-  keyEnvelopes: Record<string, string>;
-  updatedAt: string;
-};
-
 export type ChatConversation = {
   id: string;
   title: string;
+  announcement: string;
   participantIds: string[];
   createdBy: string;
   createdAt: string;
@@ -261,7 +288,6 @@ export type EncryptedChatMessage = {
   ciphertext: string;
   nonce: string;
   keyVersion: number;
-  keyEnvelopes: Record<string, string>;
   createdAt: string;
 };
 
@@ -281,59 +307,9 @@ export function createChatSocketTicket(): Promise<{ ticket: string }> {
   return jsonRequest<{ ticket: string }>("/api/chat/socket-ticket", { method: "POST" }, true);
 }
 
-export function registerChatDevice(deviceId: string, publicKeyJwk: string): Promise<ChatDeviceKey> {
-  return jsonRequest<ChatDeviceKey>(
-    `/api/chat/devices/${encodeURIComponent(deviceId)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publicKeyJwk }),
-    },
-    true,
-  );
-}
-
-export function fetchUserChatDevices(userId: string): Promise<ChatDeviceKey[]> {
-  return jsonRequest<ChatDeviceKey[]>(`/api/chat/users/${encodeURIComponent(userId)}/devices`, undefined, true);
-}
-
-export function fetchChatGroupKey(conversationId: string): Promise<ChatGroupKey> {
-  return jsonRequest<ChatGroupKey>(
-    `/api/chat/conversations/${encodeURIComponent(conversationId)}/group-key`,
-    undefined,
-    true,
-  );
-}
-
-export function initializeChatGroupKey(
-  conversationId: string,
-  payload: Pick<ChatGroupKey, "keyVersion" | "keyEnvelopes">,
-): Promise<ChatGroupKey> {
-  return jsonRequest<ChatGroupKey>(
-    `/api/chat/conversations/${encodeURIComponent(conversationId)}/group-key`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-    true,
-  );
-}
-
-export function addChatGroupKeyEnvelope(
-  conversationId: string,
-  deviceId: string,
-  keyEnvelope: string,
-): Promise<ChatGroupKey> {
-  return jsonRequest<ChatGroupKey>(
-    `/api/chat/conversations/${encodeURIComponent(conversationId)}/group-key/envelopes/${encodeURIComponent(deviceId)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyEnvelope }),
-    },
-    true,
-  );
+/** Server X25519 public key used to establish an ephemeral chat transport session. */
+export function fetchChatTransportKey(): Promise<{ publicKey: string }> {
+  return jsonRequest<{ publicKey: string }>("/api/chat/transport-key", undefined, true);
 }
 
 export function fetchChatConversations(): Promise<ChatConversation[]> {
@@ -376,11 +352,29 @@ export function deleteChatConversation(conversationId: string): Promise<ChatConv
   );
 }
 
+/** 更新群资料，仅群主可修改群名称和公告。 */
+export function updateChatConversationProfile(
+  conversationId: string,
+  request: { title: string; announcement: string },
+): Promise<ChatConversation> {
+  return jsonRequest<ChatConversation>(
+    `/api/chat/conversations/${encodeURIComponent(conversationId)}/profile`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+}
+
 export function fetchChatMessages(
   conversationId: string,
+  clientPublicKey: string,
   cursor: { after?: string; before?: string } = {},
 ): Promise<ChatMessagePage> {
   const query = new URLSearchParams();
+  query.set("clientPublicKey", clientPublicKey);
   if (cursor.after) {
     query.set("after", cursor.after);
   }
@@ -397,7 +391,7 @@ export function fetchChatMessages(
 
 export function sendChatMessage(
   conversationId: string,
-  message: Pick<EncryptedChatMessage, "ciphertext" | "nonce" | "keyVersion" | "keyEnvelopes">,
+  message: Pick<EncryptedChatMessage, "ciphertext" | "nonce"> & { clientPublicKey: string },
 ): Promise<EncryptedChatMessage> {
   return jsonRequest<EncryptedChatMessage>(
     `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
@@ -405,23 +399,6 @@ export function sendChatMessage(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(message),
-    },
-    true,
-  );
-}
-
-export function addChatMessageKeyEnvelope(
-  conversationId: string,
-  messageId: string,
-  deviceId: string,
-  keyEnvelope: string,
-): Promise<EncryptedChatMessage> {
-  return jsonRequest<EncryptedChatMessage>(
-    `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/envelopes/${encodeURIComponent(deviceId)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyEnvelope }),
     },
     true,
   );

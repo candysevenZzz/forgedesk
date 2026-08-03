@@ -12,22 +12,14 @@ public interface ChatRepository {
 
   void touchConversation(String conversationId, String updatedAt);
 
+  void updateConversationProfile(
+      String conversationId, String title, String announcement, String updatedAt);
+
   Optional<ChatConversation> findConversation(String conversationId);
 
   List<ChatConversation> conversationsFor(String userId);
 
   void appendMessage(EncryptedChatMessage message);
-
-  Optional<EncryptedChatMessage> findMessage(String conversationId, String messageId);
-
-  void mergeMessageKeyEnvelope(
-      String conversationId, String messageId, String deviceId, String keyEnvelope);
-
-  Optional<ChatGroupKey> findGroupKey(String conversationId);
-
-  void saveGroupKey(ChatGroupKey groupKey);
-
-  void mergeGroupKeyEnvelope(String conversationId, String deviceId, String keyEnvelope);
 
   ChatMessagePage messagePage(String conversationId, String after, String before, int limit);
 

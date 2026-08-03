@@ -88,6 +88,23 @@ const translationProviders: Array<{
   },
 ];
 
+const TRANSLATION_PREFERENCES_KEY = "forgedesk-translation-preferences-v1";
+
+function loadTranslationPreferences() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(TRANSLATION_PREFERENCES_KEY) ?? "{}") as Record<string, string>;
+    return {
+      provider: translationProviders.some((item) => item.id === stored.provider)
+        ? (stored.provider as TranslationProvider)
+        : "baidu",
+      sourceLanguage: stored.sourceLanguage || "zh",
+      targetLanguage: stored.targetLanguage || "en",
+    };
+  } catch {
+    return { provider: "baidu" as TranslationProvider, sourceLanguage: "zh", targetLanguage: "en" };
+  }
+}
+
 const emptyTranslationConfiguration: TranslationConfigurationInput = { appId: "", appKey: "", appSecret: "" };
 
 const timeZones = [
@@ -1143,8 +1160,8 @@ function TranslationTool(props: {
   runtimeMode: "local" | "connected";
   authenticated: boolean;
 }) {
-  const [sourceLanguage, setSourceLanguage] = useState("zh");
-  const [targetLanguage, setTargetLanguage] = useState("en");
+  const [sourceLanguage, setSourceLanguage] = useState(() => loadTranslationPreferences().sourceLanguage);
+  const [targetLanguage, setTargetLanguage] = useState(() => loadTranslationPreferences().targetLanguage);
   const [sourceText, setSourceText] = useState("");
   const [translatedText, setTranslatedText] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -1157,6 +1174,13 @@ function TranslationTool(props: {
   const [configurationError, setConfigurationError] = useState("");
   const provider = translationProviders.find((item) => item.id === props.providerId) ?? translationProviders[0];
   const needsConfiguration = props.runtimeMode === "connected" && props.authenticated && !configLoading && !configured;
+
+  useEffect(() => {
+    localStorage.setItem(
+      TRANSLATION_PREFERENCES_KEY,
+      JSON.stringify({ provider: props.providerId, sourceLanguage, targetLanguage }),
+    );
+  }, [props.providerId, sourceLanguage, targetLanguage]);
 
   useEffect(() => {
     setConfiguration(emptyTranslationConfiguration);
@@ -1361,7 +1385,7 @@ function TranslationTool(props: {
         <section className="translation-inline-settings">
           <div>
             <strong>{provider.label} 服务端配置</strong>
-            <p>配置会提交给当前登录用户的服务端空间；保存后不会回显密钥。</p>
+            <p>配置会提交给当前登录用户的服务端空间；保存后不会回显密钥，但会在此处保留配置状态。</p>
           </div>
           <div className="translation-settings-fields">
             {provider.credentialFields.map((field) => (
@@ -1399,7 +1423,7 @@ function TranslationTool(props: {
               : configLoading
                 ? "正在检查服务端配置..."
                 : configured
-                  ? `当前使用：${provider.label}，服务端配置已完成。`
+                  ? `当前使用：${provider.label}，服务端配置已保存。`
                   : `当前使用：${provider.label}，请先完成服务端配置。`}
         </span>
         <button
@@ -1514,7 +1538,9 @@ function ToolDirectory(props: { onOpen: (tool: ToolId) => void }) {
 
 function DeveloperToolboxPlugin(props: { context: PluginContext }) {
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
-  const [translationProviderId, setTranslationProviderId] = useState<TranslationProvider>("baidu");
+  const [translationProviderId, setTranslationProviderId] = useState<TranslationProvider>(
+    () => loadTranslationPreferences().provider,
+  );
 
   if (!activeTool) {
     return <ToolDirectory onOpen={setActiveTool} />;

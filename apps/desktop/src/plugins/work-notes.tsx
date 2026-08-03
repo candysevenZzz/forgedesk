@@ -23,46 +23,11 @@ import {
 } from "../work-notes-storage";
 import type { PluginContext, PluginDefinition } from "../types";
 
-const seedNotes: WorkNote[] = [
-  {
-    id: "memo-welcome",
-    kind: "memo",
-    title: "",
-    content: "",
-    completed: false,
-    pinned: false,
-    x: 0,
-    y: 0,
-    zIndex: 1,
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "todo-welcome",
-    kind: "todo",
-    title: "",
-    content: "",
-    completed: false,
-    pinned: false,
-    x: 0,
-    y: 0,
-    zIndex: 1,
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "card-welcome",
-    kind: "card",
-    title: "",
-    content: "",
-    completed: false,
-    pinned: false,
-    x: 24,
-    y: 24,
-    zIndex: 1,
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 type DragState = { id: string; offsetX: number; offsetY: number } | null;
+
+function archiveHasContent(archive: WorkNotesArchive) {
+  return Object.values(archive.days).some((notes) => notes.length > 0) || Object.keys(archive.tombstones).length > 0;
+}
 
 function clearLegacySeedText(note: WorkNote): WorkNote {
   if (note.id === "memo-welcome" && note.title === "备忘录" && note.content === "记录需要跟进的想法和信息。") {
@@ -79,6 +44,12 @@ function clearLegacySeedText(note: WorkNote): WorkNote {
     return { ...note, title: "", content: "" };
   }
   return note;
+}
+
+function isEmptyLegacySeed(note: WorkNote) {
+  return (
+    ["memo-welcome", "todo-welcome", "card-welcome"].includes(note.id) && !note.title.trim() && !note.content.trim()
+  );
 }
 
 function createNote(kind: WorkNoteKind, position: number): WorkNote {
@@ -126,18 +97,36 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
   const [syncTick, setSyncTick] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
+  const shouldPersistRef = useRef(false);
   const lastSyncedArchiveRef = useRef("");
   const lastSyncAttemptArchiveRef = useRef("");
 
   useEffect(() => {
     void loadWorkNotes().then((savedArchive) => {
+      const legacySeedIds: string[] = [];
       const days = Object.fromEntries(
-        Object.entries(savedArchive.days).map(([date, notes]) => [date, notes.map(clearLegacySeedText)]),
+        Object.entries(savedArchive.days)
+          .map(([date, notes]) => [
+            date,
+            notes.map(clearLegacySeedText).filter((note) => {
+              if (isEmptyLegacySeed(note)) {
+                legacySeedIds.push(note.id);
+                return false;
+              }
+              return true;
+            }),
+          ])
+          .filter(([, notes]) => notes.length),
       );
+      const removedAt = new Date().toISOString();
+      shouldPersistRef.current = legacySeedIds.length > 0;
       setArchive({
         version: 2,
-        days: { ...days, [today]: days[today] ?? seedNotes },
-        tombstones: savedArchive.tombstones,
+        days,
+        tombstones: {
+          ...savedArchive.tombstones,
+          ...Object.fromEntries(legacySeedIds.map((id) => [id, removedAt])),
+        },
       });
       setSelectedDate(today);
       setLoaded(true);
@@ -145,7 +134,7 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
   }, [today]);
 
   useEffect(() => {
-    if (!loaded) {
+    if (!loaded || (!shouldPersistRef.current && !archiveHasContent(archive))) {
       return undefined;
     }
     const timeout = window.setTimeout(() => {
@@ -196,13 +185,22 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
   }, [archive, loaded, props.context.runtimeMode, syncTick]);
 
   const notes = archive.days[selectedDate] ?? [];
-  const historyDates = Object.keys(archive.days).sort((first, second) => second.localeCompare(first));
+  const historyDates = [today, ...Object.keys(archive.days).filter((date) => date !== today)].sort((first, second) =>
+    second.localeCompare(first),
+  );
 
   function updateCurrentDay(updater: (current: WorkNote[]) => WorkNote[]) {
-    setArchive((current) => ({
-      ...current,
-      days: { ...current.days, [selectedDate]: updater(current.days[selectedDate] ?? []) },
-    }));
+    shouldPersistRef.current = true;
+    setArchive((current) => {
+      const nextNotes = updater(current.days[selectedDate] ?? []);
+      const nextDays = { ...current.days };
+      if (nextNotes.length) {
+        nextDays[selectedDate] = nextNotes;
+      } else {
+        delete nextDays[selectedDate];
+      }
+      return { ...current, days: nextDays };
+    });
   }
 
   function updateNote(id: string, changes: Partial<WorkNote>) {
@@ -217,11 +215,17 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
 
   function deleteNote(id: string) {
     const deletedAt = new Date().toISOString();
-    setArchive((current) => ({
-      ...current,
-      days: { ...current.days, [selectedDate]: (current.days[selectedDate] ?? []).filter((note) => note.id !== id) },
-      tombstones: { ...current.tombstones, [id]: deletedAt },
-    }));
+    shouldPersistRef.current = true;
+    setArchive((current) => {
+      const remaining = (current.days[selectedDate] ?? []).filter((note) => note.id !== id);
+      const nextDays = { ...current.days };
+      if (remaining.length) {
+        nextDays[selectedDate] = remaining;
+      } else {
+        delete nextDays[selectedDate];
+      }
+      return { ...current, days: nextDays, tombstones: { ...current.tombstones, [id]: deletedAt } };
+    });
   }
 
   function raiseNote(id: string, pin: boolean) {

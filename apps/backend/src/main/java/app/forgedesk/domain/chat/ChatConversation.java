@@ -5,6 +5,7 @@ import java.util.List;
 public record ChatConversation(
     String id,
     String title,
+    String announcement,
     List<String> participantIds,
     String createdBy,
     String createdAt,

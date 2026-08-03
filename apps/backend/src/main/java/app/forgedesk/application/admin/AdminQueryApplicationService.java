@@ -3,6 +3,7 @@ package app.forgedesk.application.admin;
 import app.forgedesk.application.auth.AuthApplicationService;
 import app.forgedesk.application.translation.TranslationConfigurationApplicationService;
 import app.forgedesk.application.worknotes.WorkNotesSyncApplicationService;
+import app.forgedesk.domain.admin.ChatMonitor;
 import app.forgedesk.domain.admin.StorageIndex;
 import app.forgedesk.domain.admin.SystemResourceMonitor;
 import app.forgedesk.domain.time.PlatformClock;
@@ -20,6 +21,8 @@ public class AdminQueryApplicationService {
 
   private final StorageIndex storageIndex;
 
+  private final ChatMonitor chatMonitor;
+
   private final SystemResourceMonitor resourceMonitor;
 
   private final PlatformClock clock;
@@ -31,12 +34,14 @@ public class AdminQueryApplicationService {
       WorkNotesSyncApplicationService workNotesSyncService,
       TranslationConfigurationApplicationService translationConfigurationService,
       StorageIndex storageIndex,
+      ChatMonitor chatMonitor,
       SystemResourceMonitor resourceMonitor,
       PlatformClock clock) {
     this.authService = authService;
     this.workNotesSyncService = workNotesSyncService;
     this.translationConfigurationService = translationConfigurationService;
     this.storageIndex = storageIndex;
+    this.chatMonitor = chatMonitor;
     this.resourceMonitor = resourceMonitor;
     this.clock = clock;
     this.startedAt = clock.instant();
@@ -113,6 +118,18 @@ public class AdminQueryApplicationService {
             resources.disk().usableBytes()),
         totalUserStorage,
         userStorage);
+  }
+
+  public ChatMonitor.ChatOverview chatOverview() {
+    return chatMonitor.overview();
+  }
+
+  public List<ChatMonitor.ConversationRecord> chatConversations() {
+    return chatMonitor.conversations(200);
+  }
+
+  public List<ChatMonitor.MessageRecord> recentChatMessages() {
+    return chatMonitor.recentMessages(200);
   }
 
   private java.time.Instant parseTimestamp(String value) {

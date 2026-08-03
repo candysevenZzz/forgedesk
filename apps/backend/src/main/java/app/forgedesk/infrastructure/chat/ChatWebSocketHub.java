@@ -124,13 +124,6 @@ public class ChatWebSocketHub extends TextWebSocketHandler implements ChatRealti
   }
 
   @Override
-  public void deviceChanged(List<String> recipientUserIds, String changedUserId) {
-    recipientUserIds.forEach(
-        recipientId ->
-            notify(recipientId, Map.of("type", "device-changed", "userId", changedUserId)));
-  }
-
-  @Override
   public Set<String> onlineUserIds() {
     return Set.copyOf(sessionsByUser.keySet());
   }

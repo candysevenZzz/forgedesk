@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Anvil,
+  ChevronDown,
   Cloud,
   Command,
   HardDrive,
@@ -8,7 +9,6 @@ import {
   LogIn,
   LogOut,
   Search,
-  ShieldCheck,
   ServerCog,
   UserRound,
   X,
@@ -129,6 +129,118 @@ function CommandPalette(props: {
           {!matches.length ? <p className="command-palette-empty">没有匹配的插件</p> : null}
         </div>
       </section>
+    </div>
+  );
+}
+
+function AccountMenu(props: {
+  user: AuthUser;
+  onOpenProfile: () => void;
+  onOpenAdmin: () => void;
+  onSignOut: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const closeWhenOutside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", closeWhenOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeWhenOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  function openProfile() {
+    setOpen(false);
+    props.onOpenProfile();
+  }
+
+  function openAdmin() {
+    setOpen(false);
+    props.onOpenAdmin();
+  }
+
+  function signOut() {
+    setOpen(false);
+    props.onSignOut();
+  }
+
+  return (
+    <div className="account-menu" ref={menuRef}>
+      <button
+        className="account-profile"
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="account-avatar">
+          {props.user.avatarUrl ? (
+            <img src={assetUrl(props.user.avatarUrl)} alt="" />
+          ) : (
+            <UserRound size={16} aria-hidden="true" />
+          )}
+        </span>
+        <span className="account-profile-copy">
+          <strong>{props.user.displayName}</strong>
+          <small>{props.user.role === "ADMIN" ? "管理员" : "已登录"}</small>
+        </span>
+        <ChevronDown
+          size={15}
+          className={open ? "account-menu-chevron open" : "account-menu-chevron"}
+          aria-hidden="true"
+        />
+      </button>
+      {open ? (
+        <div className="account-menu-popover" role="menu" aria-label="账户菜单">
+          <div className="account-menu-summary">
+            <span className="account-menu-avatar">
+              {props.user.avatarUrl ? (
+                <img src={assetUrl(props.user.avatarUrl)} alt="" />
+              ) : (
+                <UserRound size={21} aria-hidden="true" />
+              )}
+            </span>
+            <span>
+              <strong>{props.user.displayName}</strong>
+              <small>@{props.user.username}</small>
+              <em>{props.user.role === "ADMIN" ? "管理员" : "普通用户"}</em>
+            </span>
+          </div>
+          <div className="account-menu-actions">
+            <button type="button" role="menuitem" onClick={openProfile}>
+              <UserRound size={16} aria-hidden="true" />
+              个人资料
+            </button>
+            {props.user.role === "ADMIN" ? (
+              <button type="button" role="menuitem" onClick={openAdmin}>
+                <ServerCog size={16} aria-hidden="true" />
+                管理端
+              </button>
+            ) : null}
+          </div>
+          <div className="account-menu-actions account-menu-danger">
+            <button type="button" role="menuitem" onClick={signOut}>
+              <LogOut size={16} aria-hidden="true" />
+              退出登录
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -363,47 +475,12 @@ function App() {
           </div>
           <div className="topbar-account">
             {auth ? (
-              <>
-                <button
-                  className="account-profile"
-                  type="button"
-                  onClick={() => setShowProfileDialog(true)}
-                  data-tooltip="个人资料"
-                >
-                  <span className="account-avatar">
-                    {auth.avatarUrl ? (
-                      <img src={assetUrl(auth.avatarUrl)} alt="" />
-                    ) : (
-                      <UserRound size={15} aria-hidden="true" />
-                    )}
-                  </span>
-                  <span>
-                    <ShieldCheck size={15} aria-hidden="true" />
-                    <strong>{auth.displayName}</strong>
-                    <small>{auth.role === "ADMIN" ? "管理员" : "已登录"}</small>
-                  </span>
-                </button>
-                {auth.role === "ADMIN" ? (
-                  <button
-                    className="icon-button"
-                    type="button"
-                    onClick={openAdminPage}
-                    data-tooltip="打开管理端"
-                    aria-label="打开管理端"
-                  >
-                    <ServerCog size={16} aria-hidden="true" />
-                  </button>
-                ) : null}
-                <button
-                  className="icon-button"
-                  type="button"
-                  onClick={() => void signOut()}
-                  data-tooltip="退出登录"
-                  aria-label="退出登录"
-                >
-                  <LogOut size={16} aria-hidden="true" />
-                </button>
-              </>
+              <AccountMenu
+                user={auth}
+                onOpenProfile={() => setShowProfileDialog(true)}
+                onOpenAdmin={openAdminPage}
+                onSignOut={() => void signOut()}
+              />
             ) : (
               <button className="topbar-login" type="button" onClick={() => setShowAuthDialog(true)}>
                 <LogIn size={16} aria-hidden="true" />

@@ -3,8 +3,6 @@ package app.forgedesk.interfaces.rest.chat;
 import app.forgedesk.application.chat.ChatApplicationService;
 import app.forgedesk.application.chat.ChatSocketTicketApplicationService;
 import app.forgedesk.domain.chat.ChatConversation;
-import app.forgedesk.domain.chat.ChatDeviceKey;
-import app.forgedesk.domain.chat.ChatGroupKey;
 import app.forgedesk.domain.chat.ChatMessagePage;
 import app.forgedesk.domain.chat.ChatUser;
 import app.forgedesk.domain.chat.EncryptedChatMessage;
@@ -53,21 +51,18 @@ public class ChatController {
     return chatService.users(RequestIdentity.current().id());
   }
 
-  @PutMapping("/devices/{deviceId}")
-  ChatDeviceKey registerDevice(@PathVariable String deviceId, @RequestBody DeviceRequest request) {
-    return chatService.registerDevice(
-        RequestIdentity.current().id(), deviceId, request.publicKeyJwk());
-  }
-
-  @GetMapping("/users/{userId}/devices")
-  List<ChatDeviceKey> deviceKeys(@PathVariable String userId) {
-    return chatService.deviceKeys(userId);
-  }
-
   @PostMapping("/conversations")
   ChatConversation create(@RequestBody ConversationRequest request) {
     return chatService.create(
         RequestIdentity.current().id(), request.title(), request.participantIds());
+  }
+
+  /** 更新群名称和公告。仅群主有权限，成员调整不会通过此接口完成。 */
+  @PutMapping("/conversations/{conversationId}/profile")
+  ChatConversation updateProfile(
+      @PathVariable String conversationId, @RequestBody ConversationProfileRequest request) {
+    return chatService.updateGroupProfile(
+        RequestIdentity.current().id(), conversationId, request.title(), request.announcement());
   }
 
   /** 永久删除会话及密文消息，仅会话创建者可调用。响应会由统一 Result 包装。 */
@@ -76,36 +71,20 @@ public class ChatController {
     return chatService.delete(RequestIdentity.current().id(), conversationId);
   }
 
-  @GetMapping("/conversations/{conversationId}/group-key")
-  ChatGroupKey groupKey(@PathVariable String conversationId) {
-    return chatService.groupKey(RequestIdentity.current().id(), conversationId);
-  }
-
-  @PutMapping("/conversations/{conversationId}/group-key")
-  ChatGroupKey initializeGroupKey(
-      @PathVariable String conversationId, @RequestBody GroupKeyRequest request) {
-    return chatService.initializeGroupKey(
-        RequestIdentity.current().id(),
-        conversationId,
-        request.keyVersion(),
-        request.keyEnvelopes());
-  }
-
-  @PutMapping("/conversations/{conversationId}/group-key/envelopes/{deviceId}")
-  ChatGroupKey addGroupKeyEnvelope(
-      @PathVariable String conversationId,
-      @PathVariable String deviceId,
-      @RequestBody KeyEnvelopeRequest request) {
-    return chatService.addGroupKeyEnvelope(
-        RequestIdentity.current().id(), conversationId, deviceId, request.keyEnvelope());
+  /** Returns the server X25519 transport public key; it is not a secret. */
+  @GetMapping("/transport-key")
+  TransportKey transportKey() {
+    return new TransportKey(chatService.transportPublicKey(RequestIdentity.current().id()));
   }
 
   @GetMapping("/conversations/{conversationId}/messages")
   ChatMessagePage messages(
       @PathVariable String conversationId,
       @RequestParam(defaultValue = "") String after,
-      @RequestParam(defaultValue = "") String before) {
-    return chatService.messages(RequestIdentity.current().id(), conversationId, after, before);
+      @RequestParam(defaultValue = "") String before,
+      @RequestParam(defaultValue = "") String clientPublicKey) {
+    return chatService.messages(
+        RequestIdentity.current().id(), conversationId, after, before, clientPublicKey);
   }
 
   @PostMapping("/conversations/{conversationId}/messages")
@@ -115,31 +94,18 @@ public class ChatController {
         RequestIdentity.current().id(),
         conversationId,
         new ChatApplicationService.EncryptedMessageCommand(
-            request.ciphertext(), request.nonce(), request.keyVersion(), request.keyEnvelopes()));
-  }
-
-  @PutMapping("/conversations/{conversationId}/messages/{messageId}/envelopes/{deviceId}")
-  EncryptedChatMessage addKeyEnvelope(
-      @PathVariable String conversationId,
-      @PathVariable String messageId,
-      @PathVariable String deviceId,
-      @RequestBody KeyEnvelopeRequest request) {
-    return chatService.addKeyEnvelope(
-        RequestIdentity.current().id(), conversationId, messageId, deviceId, request.keyEnvelope());
+            request.ciphertext(), request.nonce(), request.clientPublicKey()));
   }
 
   record ConversationRequest(String title, List<String> participantIds) {}
 
-  record UnreadCountsRequest(Map<String, String> cursors) {}
+  record ConversationProfileRequest(String title, String announcement) {}
 
-  record DeviceRequest(String publicKeyJwk) {}
+  record UnreadCountsRequest(Map<String, String> cursors) {}
 
   record SocketTicket(String ticket) {}
 
-  record KeyEnvelopeRequest(String keyEnvelope) {}
+  record TransportKey(String publicKey) {}
 
-  record GroupKeyRequest(int keyVersion, Map<String, String> keyEnvelopes) {}
-
-  record MessageRequest(
-      String ciphertext, String nonce, int keyVersion, Map<String, String> keyEnvelopes) {}
+  record MessageRequest(String ciphertext, String nonce, String clientPublicKey) {}
 }

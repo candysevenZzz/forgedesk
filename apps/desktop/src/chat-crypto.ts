@@ -1,52 +1,22 @@
-import type { ChatDeviceKey, ChatGroupKey, EncryptedChatMessage } from "./api";
+import { gcm } from "@noble/ciphers/aes";
+import { x25519 } from "@noble/curves/ed25519";
+import type { EncryptedChatMessage } from "./api";
 
-const DATABASE_NAME = "forgedesk-chat-crypto";
-const STORE_NAME = "identities";
-const DEVICE_IDS_KEY = "forgedesk-chat-device-ids-v1";
-const HTTP_PLAINTEXT_PREFIX = "forgedesk-http-plain-v1:";
-const HTTP_PLAINTEXT_ENVELOPE = "forgedesk-http-plain-v1";
-const SECURE_CONTEXT_REQUIRED_MESSAGE = "当前浏览器不支持安全加密能力";
+const TRANSPORT_VERSION = 2;
 
-type StoredIdentity = {
-  userId: string;
-  deviceId: string;
-  publicKeyJwk: JsonWebKey;
-  privateKeyJwk: JsonWebKey;
+export type ChatTransportSession = {
+  clientPrivateKey: Uint8Array;
+  clientPublicKey: string;
+  serverPublicKey: Uint8Array;
 };
 
-export type DeviceIdentity = {
-  deviceId: string;
-  publicKeyJwk: string;
-  privateKey: CryptoKey | null;
+export type ChatTransportPayload = Pick<EncryptedChatMessage, "ciphertext" | "nonce" | "keyVersion"> & {
+  clientPublicKey: string;
 };
 
-export type EncryptedPayload = Pick<EncryptedChatMessage, "ciphertext" | "nonce" | "keyVersion" | "keyEnvelopes">;
-
-export type GroupKeyPayload = Pick<ChatGroupKey, "keyVersion" | "keyEnvelopes"> & { rawKey: ArrayBuffer };
-
-function secureCrypto(): Crypto {
-  const webCrypto = globalThis.crypto;
-  if (!globalThis.isSecureContext || !webCrypto?.subtle) {
-    throw new Error(SECURE_CONTEXT_REQUIRED_MESSAGE);
-  }
-  return webCrypto;
-}
-
-export function isHttpPlaintextCompatibilityMode() {
-  return !globalThis.isSecureContext || !globalThis.crypto?.subtle;
-}
-
-export function requiresHttpPlaintextCompatibility(deviceKeys: ChatDeviceKey[]) {
-  return (
-    isHttpPlaintextCompatibilityMode() ||
-    deviceKeys.some((device) => device.publicKeyJwk.includes(HTTP_PLAINTEXT_ENVELOPE))
-  );
-}
-
-function toBase64(value: ArrayBuffer) {
-  const bytes = new Uint8Array(value);
+function toBase64(value: Uint8Array) {
   let output = "";
-  for (const byte of bytes) {
+  for (const byte of value) {
     output += String.fromCharCode(byte);
   }
   return btoa(output);
@@ -58,272 +28,58 @@ function fromBase64(value: string) {
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
   }
-  return bytes.buffer;
+  return bytes;
 }
 
-function encodePlaintext(plaintext: string) {
-  return `${HTTP_PLAINTEXT_PREFIX}${toBase64(new TextEncoder().encode(plaintext).buffer)}`;
+function associatedData(conversationId: string) {
+  return new TextEncoder().encode(`forgedesk-chat-transport-v2:${conversationId}`);
 }
 
-function decodePlaintext(ciphertext: string) {
-  return new TextDecoder().decode(fromBase64(ciphertext.slice(HTTP_PLAINTEXT_PREFIX.length)));
-}
-
-function randomUuid() {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
-      const random = Math.floor(Math.random() * 16);
-      const value = character === "x" ? random : (random & 0x3) | 0x8;
-      return value.toString(16);
-    })
-  );
-}
-
-function deviceIds() {
-  try {
-    const value = JSON.parse(localStorage.getItem(DEVICE_IDS_KEY) ?? "{}") as Record<string, string>;
-    return typeof value === "object" && value ? value : {};
-  } catch {
-    return {};
-  }
-}
-
-function deviceIdFor(userId: string) {
-  const values = deviceIds();
-  if (values[userId]) {
-    return values[userId];
-  }
-  const deviceId = randomUuid();
-  localStorage.setItem(DEVICE_IDS_KEY, JSON.stringify({ ...values, [userId]: deviceId }));
-  return deviceId;
-}
-
-function database() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 1);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-        request.result.createObjectStore(STORE_NAME, { keyPath: "userId" });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("无法打开本地密钥库"));
-  });
-}
-
-async function readIdentity(userId: string) {
-  const db = await database();
-  return new Promise<StoredIdentity | undefined>((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readonly");
-    const request = transaction.objectStore(STORE_NAME).get(userId);
-    request.onsuccess = () => resolve(request.result as StoredIdentity | undefined);
-    request.onerror = () => reject(request.error ?? new Error("无法读取本地密钥"));
-    transaction.oncomplete = () => db.close();
-  });
-}
-
-async function saveIdentity(identity: StoredIdentity) {
-  const db = await database();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put(identity);
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => reject(transaction.error ?? new Error("无法保存本地密钥"));
-  });
-}
-
-async function privateKey(identity: StoredIdentity) {
-  return secureCrypto().subtle.importKey("jwk", identity.privateKeyJwk, { name: "RSA-OAEP", hash: "SHA-256" }, false, [
-    "decrypt",
-  ]);
-}
-
-export async function ensureDeviceIdentity(userId: string): Promise<DeviceIdentity> {
-  if (isHttpPlaintextCompatibilityMode()) {
-    return {
-      deviceId: deviceIdFor(userId),
-      publicKeyJwk: JSON.stringify({ algorithm: HTTP_PLAINTEXT_ENVELOPE }),
-      privateKey: null,
-    };
-  }
-  const crypto = secureCrypto();
-  const current = await readIdentity(userId);
-  if (current) {
-    return {
-      deviceId: current.deviceId,
-      publicKeyJwk: JSON.stringify(current.publicKeyJwk),
-      privateKey: await privateKey(current),
-    };
-  }
-
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-    true,
-    ["encrypt", "decrypt"],
-  );
-  const stored: StoredIdentity = {
-    userId,
-    deviceId: deviceIdFor(userId),
-    publicKeyJwk: await crypto.subtle.exportKey("jwk", keyPair.publicKey),
-    privateKeyJwk: await crypto.subtle.exportKey("jwk", keyPair.privateKey),
-  };
-  await saveIdentity(stored);
-  return {
-    deviceId: stored.deviceId,
-    publicKeyJwk: JSON.stringify(stored.publicKeyJwk),
-    privateKey: await privateKey(stored),
-  };
-}
-
-async function importPublicKey(publicKeyJwk: string) {
-  return secureCrypto().subtle.importKey(
-    "jwk",
-    JSON.parse(publicKeyJwk) as JsonWebKey,
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    false,
-    ["encrypt"],
-  );
-}
-
-export async function encryptMessage(plaintext: string, deviceKeys: ChatDeviceKey[]): Promise<EncryptedPayload> {
-  if (!deviceKeys.length) {
-    throw new Error("会话成员尚未登记聊天设备");
-  }
-  if (requiresHttpPlaintextCompatibility(deviceKeys)) {
-    return {
-      ciphertext: encodePlaintext(plaintext),
-      nonce: HTTP_PLAINTEXT_ENVELOPE,
-      keyVersion: 1,
-      keyEnvelopes: Object.fromEntries(deviceKeys.map((device) => [device.deviceId, HTTP_PLAINTEXT_ENVELOPE])),
-    };
-  }
-  const crypto = secureCrypto();
-  const messageKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-  const rawMessageKey = await crypto.subtle.exportKey("raw", messageKey);
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce },
-    messageKey,
-    new TextEncoder().encode(plaintext),
-  );
-  const keyEnvelopes = Object.fromEntries(
-    await Promise.all(
-      deviceKeys.map(async (device) => {
-        const publicKey = await importPublicKey(device.publicKeyJwk);
-        const envelope = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, rawMessageKey);
-        return [device.deviceId, toBase64(envelope)];
-      }),
-    ),
-  );
-  return { ciphertext: toBase64(ciphertext), nonce: toBase64(nonce.buffer), keyVersion: 1, keyEnvelopes };
+function sharedKey(session: ChatTransportSession) {
+  return x25519.getSharedSecret(session.clientPrivateKey, session.serverPublicKey);
 }
 
 /**
- * 群会话密钥只在初始化或设备变化时为每台设备封装一次；普通群消息不再携带设备信封。
+ * Creates an ephemeral browser transport key pair. The private key is kept only in memory, while
+ * the public key travels with encrypted request bodies so the central server can derive the key.
  */
-export async function createGroupKeyPayload(deviceKeys: ChatDeviceKey[]): Promise<GroupKeyPayload> {
-  const crypto = secureCrypto();
-  if (!deviceKeys.length) {
-    throw new Error("群成员尚未登记聊天设备");
+export function createChatTransportSession(serverPublicKey: string): ChatTransportSession {
+  const decodedServerKey = fromBase64(serverPublicKey);
+  if (decodedServerKey.length !== 32) {
+    throw new Error("聊天服务传输公钥无效");
   }
-  const groupKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-  const rawKey = await crypto.subtle.exportKey("raw", groupKey);
+  const clientPrivateKey = x25519.utils.randomPrivateKey();
   return {
-    keyVersion: 1,
-    rawKey,
-    keyEnvelopes: await keyEnvelopesFor(rawKey, deviceKeys),
+    clientPrivateKey,
+    clientPublicKey: toBase64(x25519.getPublicKey(clientPrivateKey)),
+    serverPublicKey: decodedServerKey,
   };
 }
 
-export async function encryptGroupMessage(
+export function encryptChatTransportMessage(
   plaintext: string,
-  rawGroupKey: ArrayBuffer,
-  keyVersion: number,
-): Promise<EncryptedPayload> {
-  const crypto = secureCrypto();
-  const groupKey = await crypto.subtle.importKey("raw", rawGroupKey, { name: "AES-GCM" }, false, ["encrypt"]);
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce },
-    groupKey,
+  conversationId: string,
+  session: ChatTransportSession,
+): ChatTransportPayload {
+  const nonce = new Uint8Array(12);
+  globalThis.crypto.getRandomValues(nonce);
+  const ciphertext = gcm(sharedKey(session), nonce, associatedData(conversationId)).encrypt(
     new TextEncoder().encode(plaintext),
   );
-  return { ciphertext: toBase64(ciphertext), nonce: toBase64(nonce.buffer), keyVersion, keyEnvelopes: {} };
+  return {
+    ciphertext: toBase64(ciphertext),
+    nonce: toBase64(nonce),
+    keyVersion: TRANSPORT_VERSION,
+    clientPublicKey: session.clientPublicKey,
+  };
 }
 
-export async function decryptGroupKey(groupKey: ChatGroupKey, identity: DeviceIdentity): Promise<ArrayBuffer | null> {
-  const envelope = groupKey.keyEnvelopes[identity.deviceId];
-  if (!envelope || !identity.privateKey || isHttpPlaintextCompatibilityMode()) {
-    return null;
+export function decryptChatTransportMessage(message: EncryptedChatMessage, session: ChatTransportSession): string {
+  if (message.keyVersion !== TRANSPORT_VERSION) {
+    throw new Error("该消息来自已停用的点对点加密模式");
   }
-  return secureCrypto().subtle.decrypt({ name: "RSA-OAEP" }, identity.privateKey, fromBase64(envelope));
-}
-
-export async function createGroupKeyEnvelope(rawGroupKey: ArrayBuffer, target: ChatDeviceKey): Promise<string> {
-  const targetPublicKey = await importPublicKey(target.publicKeyJwk);
-  const envelope = await secureCrypto().subtle.encrypt({ name: "RSA-OAEP" }, targetPublicKey, rawGroupKey);
-  return toBase64(envelope);
-}
-
-export async function decryptMessage(
-  message: EncryptedChatMessage,
-  identity: DeviceIdentity,
-  rawGroupKey?: ArrayBuffer | null,
-): Promise<string | null> {
-  if (message.ciphertext.startsWith(HTTP_PLAINTEXT_PREFIX)) {
-    return decodePlaintext(message.ciphertext);
-  }
-  if (!identity.privateKey) {
-    return null;
-  }
-  const crypto = secureCrypto();
-  const envelope = message.keyEnvelopes[identity.deviceId];
-  if (!envelope && !rawGroupKey) {
-    return null;
-  }
-  const rawMessageKey = envelope
-    ? await crypto.subtle.decrypt({ name: "RSA-OAEP" }, identity.privateKey, fromBase64(envelope))
-    : rawGroupKey!;
-  const messageKey = await crypto.subtle.importKey("raw", rawMessageKey, { name: "AES-GCM" }, false, ["decrypt"]);
-  const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: new Uint8Array(fromBase64(message.nonce)) },
-    messageKey,
+  const plaintext = gcm(sharedKey(session), fromBase64(message.nonce), associatedData(message.conversationId)).decrypt(
     fromBase64(message.ciphertext),
   );
   return new TextDecoder().decode(plaintext);
-}
-
-export async function createMessageKeyEnvelope(
-  message: EncryptedChatMessage,
-  identity: DeviceIdentity,
-  target: ChatDeviceKey,
-): Promise<string | null> {
-  if (!identity.privateKey || isHttpPlaintextCompatibilityMode()) {
-    return null;
-  }
-  const crypto = secureCrypto();
-  const currentEnvelope = message.keyEnvelopes[identity.deviceId];
-  if (!currentEnvelope || target.deviceId === identity.deviceId) {
-    return null;
-  }
-  const rawMessageKey = await crypto.subtle.decrypt(
-    { name: "RSA-OAEP" },
-    identity.privateKey,
-    fromBase64(currentEnvelope),
-  );
-  const targetPublicKey = await importPublicKey(target.publicKeyJwk);
-  const envelope = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, targetPublicKey, rawMessageKey);
-  return toBase64(envelope);
-}
-
-async function keyEnvelopesFor(rawKey: ArrayBuffer, deviceKeys: ChatDeviceKey[]) {
-  return Object.fromEntries(
-    await Promise.all(
-      deviceKeys.map(async (device) => [device.deviceId, await createGroupKeyEnvelope(rawKey, device)]),
-    ),
-  );
 }

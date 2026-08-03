@@ -215,6 +215,7 @@ export FORGEDESK_ADMIN_BOOTSTRAP_TOKEN=<高强度随机口令>
 export FORGEDESK_DB_URL='jdbc:mysql://127.0.0.1:3306/forgedesk?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
 export FORGEDESK_DB_USERNAME=forgedesk
 export FORGEDESK_DB_PASSWORD=<数据库应用账号口令>
+export FORGEDESK_CHAT_STORAGE_KEY=<使用密码管理器生成的高熵随机值>
 export FORGEDESK_REDIS_HOST=127.0.0.1
 export FORGEDESK_REDIS_PORT=6379
 export FORGEDESK_REDIS_PASSWORD=<Redis口令>
@@ -225,8 +226,10 @@ java -jar /opt/forgedesk/forgedesk-backend.jar
 `http://203.0.113.10,http://192.168.1.20:8080`。它同时控制 REST CORS 和聊天 WebSocket
 来源校验。
 
-账号、聊天密文、头像、笔记和翻译配置存放在 MySQL；登录会话和一次性 WebSocket 票据存放在 Redis，并由 TTL 自动过期。
+账号、聊天存储密文、头像、笔记和翻译配置存放在 MySQL；登录会话和一次性 WebSocket 票据存放在 Redis，并由 TTL 自动过期。
 Flyway 会在首次启动时创建和版本化 `forgedesk` 数据库结构。请备份 MySQL 数据库与 Redis 持久化文件，环境变量中的密码只保存在服务器受限权限的 `.env` 文件中，不要提交到 Git。
+
+`FORGEDESK_CHAT_STORAGE_KEY` 是聊天内容的存储加密根材料，必须独立于数据库口令并保持稳定。生成并保存后不要随意替换，否则既有聊天密文无法读取；本地开发未配置时才会使用回退值，生产环境禁止依赖该回退。
 
 生产环境应为 ForgeDesk 创建独立的 MySQL 账号，仅授予 `forgedesk.*` 所需权限。后端与 MySQL、Redis 位于同一 Docker 网络时，分别使用服务名 `mysql`、`redis`；不要将 `3306`、`6379` 直接暴露到公网。
 

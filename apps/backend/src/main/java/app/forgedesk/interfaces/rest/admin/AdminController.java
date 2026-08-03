@@ -38,4 +38,22 @@ public class AdminController {
   AdminQueryApplicationService.SystemStatus system() {
     return adminService.systemStatus();
   }
+
+  @GetMapping("/chat/overview")
+  @RequireLogin(admin = true)
+  app.forgedesk.domain.admin.ChatMonitor.ChatOverview chatOverview() {
+    return adminService.chatOverview();
+  }
+
+  @GetMapping("/chat/conversations")
+  @RequireLogin(admin = true)
+  List<app.forgedesk.domain.admin.ChatMonitor.ConversationRecord> chatConversations() {
+    return adminService.chatConversations();
+  }
+
+  @GetMapping("/chat/messages")
+  @RequireLogin(admin = true)
+  List<app.forgedesk.domain.admin.ChatMonitor.MessageRecord> recentChatMessages() {
+    return adminService.recentChatMessages();
+  }
 }
