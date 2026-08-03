@@ -19,7 +19,7 @@ public class JdbcChatMonitor implements ChatMonitor {
     Long groupCount =
         jdbc.queryForObject(
             "SELECT COUNT(*) FROM (SELECT conversation_id FROM chat_conversation_members "
-                + "GROUP BY conversation_id HAVING COUNT(*) > 2) groups",
+                + "GROUP BY conversation_id HAVING COUNT(*) > 2) grouped_conversations",
             Long.class);
     Long messageCount =
         jdbc.queryForObject("SELECT COUNT(*) FROM chat_messages WHERE key_version = 2", Long.class);
