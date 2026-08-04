@@ -1,7 +1,43 @@
 import type { WorkNotesArchive } from "./work-notes-storage";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8080" : window.location.origin);
+function defaultApiBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+  }
+  if (import.meta.env.DEV) {
+    return "http://127.0.0.1:8080";
+  }
+  return window.location.protocol === "http:" || window.location.protocol === "https:" ? window.location.origin : "";
+}
+
+export function normalizeApiBaseUrl(value: string) {
+  const normalized = value.trim().replace(/\/+$/, "");
+  if (!normalized) {
+    return "";
+  }
+  const url = new URL(normalized);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("后端地址必须使用 http:// 或 https://");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+let apiBaseUrl = defaultApiBaseUrl();
+
+export function getApiBaseUrl() {
+  return apiBaseUrl;
+}
+
+export function setApiBaseUrl(value: string) {
+  apiBaseUrl = normalizeApiBaseUrl(value);
+}
+
+function requiredApiBaseUrl() {
+  if (!apiBaseUrl) {
+    throw new Error("请先在运行模式设置中填写后端服务地址");
+  }
+  return apiBaseUrl;
+}
 let accessToken = "";
 type ApiResult<T> = { code: string; message: string; data: T; traceId: string };
 
@@ -24,18 +60,18 @@ export function chatWebSocketUrl(ticket: string) {
   if (!ticket) {
     throw new Error("聊天连接凭证无效");
   }
-  const url = new URL(API_BASE_URL);
+  const url = new URL(requiredApiBaseUrl());
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = "/ws/chat";
   url.searchParams.set("ticket", ticket);
   return url.toString();
 }
 export function assetUrl(path: string) {
-  return path ? `${API_BASE_URL}${path}` : "";
+  return path ? `${requiredApiBaseUrl()}${path}` : "";
 }
 
 async function request<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const response = await fetch(`${requiredApiBaseUrl()}${path}`);
   return unwrap<T>(response);
 }
 
@@ -47,7 +83,7 @@ async function jsonRequest<T>(path: string, init?: RequestInit, requiresAuthenti
     }
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${requiredApiBaseUrl()}${path}`, { ...init, headers });
 
   return unwrap<T>(response);
 }
@@ -259,6 +295,80 @@ export function fetchAdminChatMessages(): Promise<AdminChatMessageRecord[]> {
 
 export function fetchHealth(): Promise<{ status: string; checkedAt: string }> {
   return request<{ status: string; checkedAt: string }>("/api/health");
+}
+
+export type LandlordRoomSummary = { id: string; playerNames: string[]; updatedAt: string };
+export type LandlordPlayer = {
+  userId: string;
+  displayName: string;
+  seat: number;
+  ready: boolean;
+  handCount: number;
+  landlord: boolean;
+};
+export type LandlordMove = {
+  userId: string;
+  displayName: string;
+  action: string;
+  cards: string[];
+  bid: number;
+  createdAt: string;
+};
+export type LandlordRoom = {
+  id: string;
+  status: "WAITING" | "BIDDING" | "PLAYING" | "FINISHED";
+  ownerId: string;
+  players: LandlordPlayer[];
+  hand: string[];
+  bottomCards: string[];
+  turnSeat: number;
+  bidTurnSeat: number;
+  highestBid: number;
+  highestBidSeat: number;
+  lastCards: string[];
+  lastSeat: number;
+  winnerId: string;
+  moves: LandlordMove[];
+};
+
+export function fetchLandlordRooms(): Promise<LandlordRoomSummary[]> {
+  return jsonRequest<LandlordRoomSummary[]>("/api/landlord/rooms", undefined, true);
+}
+
+export function createLandlordRoom(): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>("/api/landlord/rooms", { method: "POST" }, true);
+}
+
+export function joinLandlordRoom(roomId: string): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(`/api/landlord/rooms/${encodeURIComponent(roomId)}/join`, { method: "POST" }, true);
+}
+
+export function fetchLandlordRoom(roomId: string): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(`/api/landlord/rooms/${encodeURIComponent(roomId)}`, undefined, true);
+}
+
+export function readyLandlordRoom(roomId: string): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(`/api/landlord/rooms/${encodeURIComponent(roomId)}/ready`, { method: "POST" }, true);
+}
+
+export function bidLandlordRoom(roomId: string, bid: number): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(
+    `/api/landlord/rooms/${encodeURIComponent(roomId)}/bid`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bid }) },
+    true,
+  );
+}
+
+export function playLandlordCards(roomId: string, cards: string[]): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(
+    `/api/landlord/rooms/${encodeURIComponent(roomId)}/play`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cards }) },
+    true,
+  );
+}
+
+export function passLandlordRoom(roomId: string): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(`/api/landlord/rooms/${encodeURIComponent(roomId)}/pass`, { method: "POST" }, true);
 }
 
 export type ChatUser = {

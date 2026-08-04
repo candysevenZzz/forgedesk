@@ -322,7 +322,7 @@ function WorkNotesPlugin(props: { context: PluginContext }) {
         </div>
         <div className="notes-date-rail">
           {historyDates.map((date) => {
-            const dateNotes = archive.days[date];
+            const dateNotes = archive.days[date] ?? [];
             const dateParts = historyDateParts(date, today);
             return (
               <button

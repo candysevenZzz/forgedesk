@@ -30,7 +30,7 @@ spring:
 forgedesk:
   time-zone: ${FORGEDESK_TIME_ZONE:Asia/Shanghai}
   web:
-    allowed-origins: ${FORGEDESK_ALLOWED_ORIGINS:http://localhost:1420,http://127.0.0.1:1420}
+    allowed-origins: ${FORGEDESK_ALLOWED_ORIGINS:http://localhost:1420,http://127.0.0.1:1420,http://tauri.localhost,https://tauri.localhost,tauri://localhost}
 
 logging:
   pattern:

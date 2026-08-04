@@ -220,6 +220,25 @@ textarea:focus-visible {
   color: var(--faint);
   font-size: 11px;
 }
+.runtime-footer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.runtime-footer-head button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: var(--faint);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+.runtime-footer-head button:hover {
+  color: var(--cyan);
+  background: var(--cyan-soft);
+}
 .runtime-mode-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -268,6 +287,89 @@ textarea:focus-visible {
 }
 .sidebar-footer strong.online {
   color: var(--green);
+}
+.backend-settings-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 6, 10, 0.68);
+}
+.backend-settings-dialog {
+  width: min(100%, 470px);
+  padding: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.46);
+}
+.backend-settings-dialog header,
+.backend-settings-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.backend-settings-dialog header > div > span {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+.backend-settings-dialog h2 {
+  margin: 3px 0 0;
+  font-size: 18px;
+}
+.backend-settings-dialog > label {
+  display: grid;
+  gap: 6px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.backend-settings-dialog input {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--control-radius);
+  background: var(--surface-input);
+}
+.backend-settings-dialog > p {
+  margin: 10px 0 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.backend-settings-error {
+  display: block;
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 11px;
+}
+.backend-settings-dialog footer {
+  margin-top: 18px;
+}
+.backend-settings-dialog footer button {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  font-size: 12px;
+}
+.backend-settings-dialog footer button.primary {
+  color: #071014;
+  border-color: var(--cyan);
+  background: var(--cyan);
+  font-weight: 650;
+}
+.backend-settings-dialog footer button:disabled {
+  cursor: wait;
+  opacity: 0.64;
 }
 
 .platform-content {
@@ -1601,6 +1703,396 @@ h2 {
   border: 0;
   border-radius: 0;
 }
+
+/* Online landlord */
+.landlord-unavailable,
+.landlord-lobby,
+.landlord-table-shell {
+  width: min(100%, 1180px);
+}
+.landlord-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 220px;
+  padding: 28px;
+  color: var(--amber);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.landlord-unavailable h2,
+.landlord-lobby h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+}
+.landlord-unavailable p,
+.landlord-lobby p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.landlord-lobby {
+  display: grid;
+  gap: 16px;
+}
+.landlord-lobby > header,
+.landlord-table-head,
+.landlord-lobby-head,
+.landlord-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.landlord-lobby > header {
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.landlord-lobby > header span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 650;
+}
+.landlord-primary,
+.landlord-room-list button,
+.landlord-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 650;
+}
+.landlord-primary {
+  color: #221808;
+  border-color: var(--amber);
+  background: var(--amber);
+}
+.landlord-primary:disabled,
+.landlord-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+.landlord-lobby-head {
+  min-height: 34px;
+}
+.landlord-lobby-head strong {
+  font-size: 13px;
+}
+.landlord-icon-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.landlord-room-list {
+  display: grid;
+  gap: 7px;
+}
+.landlord-room-list article {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.landlord-room-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--amber);
+  border-radius: 5px;
+  background: rgba(245, 189, 103, 0.12);
+}
+.landlord-room-list strong,
+.landlord-room-list small {
+  display: block;
+}
+.landlord-room-list strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.landlord-room-list small {
+  margin-top: 3px;
+  color: var(--faint);
+  font-size: 11px;
+}
+.landlord-empty,
+.landlord-error {
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--surface-input);
+}
+.landlord-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+}
+.landlord-table-shell {
+  display: grid;
+  gap: 10px;
+}
+.landlord-table-head {
+  min-height: 42px;
+}
+.landlord-table-head > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--muted);
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+}
+.landlord-table-head > button:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+.landlord-table-head > div {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.landlord-table-head strong {
+  font-size: 13px;
+}
+.landlord-table-head span {
+  color: var(--faint);
+  font-size: 10px;
+}
+.landlord-room-id {
+  min-width: 76px;
+  text-align: right;
+}
+.landlord-table {
+  position: relative;
+  min-height: 440px;
+  overflow: hidden;
+  border: 1px solid rgba(213, 167, 86, 0.32);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(52, 127, 90, 0.36), transparent 47%),
+    linear-gradient(145deg, #172720, #0d1814 68%);
+}
+.landlord-table::before {
+  position: absolute;
+  inset: 18px;
+  border: 1px solid rgba(244, 204, 127, 0.14);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+.landlord-bottom-cards {
+  position: absolute;
+  z-index: 1;
+  top: 20px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  transform: translateX(-50%);
+  color: rgba(240, 245, 235, 0.6);
+  font-size: 10px;
+}
+.landlord-mini-card,
+.landlord-play-card {
+  display: grid;
+  min-width: 23px;
+  height: 29px;
+  place-items: center;
+  color: #342c22;
+  border-radius: 3px;
+  background: #f4ead4;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+.landlord-players {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+.landlord-player {
+  position: absolute;
+  display: grid;
+  min-width: 116px;
+  justify-items: center;
+  gap: 3px;
+  padding: 8px 10px;
+  color: var(--muted);
+  border: 1px solid rgba(228, 239, 225, 0.18);
+  border-radius: 6px;
+  background: rgba(8, 19, 14, 0.76);
+}
+.landlord-player > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: var(--amber);
+  border-radius: 50%;
+  background: rgba(245, 189, 103, 0.14);
+}
+.landlord-player strong {
+  color: #edf4e9;
+  font-size: 12px;
+}
+.landlord-player small {
+  color: #9aa99e;
+  font-size: 10px;
+}
+.landlord-player.active {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px rgba(245, 189, 103, 0.16);
+}
+.landlord-player.seat-0 {
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+}
+.landlord-player.seat-1 {
+  top: 50%;
+  left: 36px;
+  transform: translateY(-50%);
+}
+.landlord-player.seat-2 {
+  top: 50%;
+  right: 36px;
+  transform: translateY(-50%);
+}
+.landlord-last-play {
+  position: absolute;
+  z-index: 1;
+  top: 47%;
+  left: 50%;
+  display: grid;
+  min-width: 180px;
+  justify-items: center;
+  gap: 7px;
+  transform: translate(-50%, -50%);
+}
+.landlord-last-play > span {
+  color: #afbdad;
+  font-size: 11px;
+}
+.landlord-last-play > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+}
+.landlord-play-card {
+  min-width: 31px;
+  height: 42px;
+  font-size: 13px;
+}
+.landlord-moves {
+  position: absolute;
+  z-index: 1;
+  right: 15px;
+  bottom: 13px;
+  width: 175px;
+  padding: 8px;
+  border: 1px solid rgba(228, 239, 225, 0.12);
+  border-radius: 5px;
+  background: rgba(8, 19, 14, 0.7);
+}
+.landlord-moves p {
+  margin: 2px 0;
+  color: #9cae9e;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.landlord-moves strong {
+  margin-right: 4px;
+  color: #d9e5d8;
+  font-weight: 600;
+}
+.landlord-hand {
+  display: flex;
+  align-items: end;
+  min-height: 114px;
+  padding: 16px 20px 4px;
+  overflow-x: auto;
+}
+.landlord-card {
+  display: grid;
+  width: 52px;
+  height: 76px;
+  flex: 0 0 52px;
+  align-content: space-between;
+  justify-items: start;
+  margin-left: -15px;
+  padding: 7px 8px;
+  color: #1d2731;
+  border: 1px solid #c7bda9;
+  border-radius: 5px;
+  background: #f6f1e6;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+.landlord-card:first-child {
+  margin-left: 0;
+}
+.landlord-card:hover {
+  transform: translateY(-8px);
+}
+.landlord-card.selected {
+  transform: translateY(-14px);
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px rgba(245, 189, 103, 0.35);
+}
+.landlord-card strong {
+  font-size: 16px;
+  line-height: 1;
+}
+.landlord-card span {
+  justify-self: end;
+  font-size: 20px;
+  line-height: 1;
+}
+.landlord-card.red {
+  color: #c34d47;
+}
+.landlord-actions {
+  min-height: 48px;
+  padding: 7px 0;
+}
+.landlord-actions > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.landlord-finished {
+  padding: 12px 0;
+}
+
 .canvas-game {
   position: relative;
   display: grid;

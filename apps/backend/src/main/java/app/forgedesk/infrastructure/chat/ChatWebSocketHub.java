@@ -2,6 +2,7 @@ package app.forgedesk.infrastructure.chat;
 
 import app.forgedesk.application.chat.ChatSocketTicketApplicationService;
 import app.forgedesk.domain.chat.ChatRealtimeNotifier;
+import app.forgedesk.domain.landlord.LandlordRealtimeNotifier;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -19,7 +20,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 @Component
 @RequiredArgsConstructor
-public class ChatWebSocketHub extends TextWebSocketHandler implements ChatRealtimeNotifier {
+public class ChatWebSocketHub extends TextWebSocketHandler
+    implements ChatRealtimeNotifier, LandlordRealtimeNotifier {
 
   private final ChatSocketTicketApplicationService socketTickets;
 
@@ -121,6 +123,12 @@ public class ChatWebSocketHub extends TextWebSocketHandler implements ChatRealti
                     senderId,
                     "createdAt",
                     createdAt)));
+  }
+
+  @Override
+  public void roomChanged(List<String> userIds, String roomId) {
+    userIds.forEach(
+        userId -> notify(userId, Map.of("type", "landlord-room-changed", "roomId", roomId)));
   }
 
   @Override

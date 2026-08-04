@@ -2,6 +2,7 @@ package app.forgedesk.interfaces.rest;
 
 import app.forgedesk.domain.auth.AuthenticationException;
 import app.forgedesk.domain.chat.ChatException;
+import app.forgedesk.domain.landlord.LandlordGameException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -35,6 +36,12 @@ public class RestExceptionHandler {
   public ResponseEntity<ApiResult<Void>> chat(ChatException exception) {
     return ResponseEntity.badRequest()
         .body(ApiResult.failure("CHAT_ERROR", exception.getMessage()));
+  }
+
+  @ExceptionHandler(LandlordGameException.class)
+  public ResponseEntity<ApiResult<Void>> landlord(LandlordGameException exception) {
+    return ResponseEntity.badRequest()
+        .body(ApiResult.failure("LANDLORD_GAME_ERROR", exception.getMessage()));
   }
 
   @ExceptionHandler(ResponseStatusException.class)

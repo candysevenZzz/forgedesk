@@ -10,6 +10,7 @@ import {
   LogOut,
   Search,
   ServerCog,
+  Settings2,
   UserRound,
   X,
 } from "lucide-react";
@@ -18,7 +19,10 @@ import {
   assetUrl,
   fetchCurrentUser,
   fetchHealth,
+  getApiBaseUrl,
   logoutAccount,
+  normalizeApiBaseUrl,
+  setApiBaseUrl,
   setAccessToken,
   type AuthResult,
   type AuthUser,
@@ -245,6 +249,71 @@ function AccountMenu(props: {
   );
 }
 
+function BackendSettingsDialog(props: {
+  initialUrl: string;
+  onSave: (url: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState(props.initialUrl);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await props.onSave(url);
+      props.onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "后端地址保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="backend-settings-backdrop" role="presentation" onMouseDown={props.onClose}>
+      <section
+        className="backend-settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="backend-settings-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>服务连接</span>
+            <h2 id="backend-settings-title">后端地址</h2>
+          </div>
+          <button className="icon-button" type="button" onClick={props.onClose} aria-label="关闭">
+            <X size={16} aria-hidden="true" />
+          </button>
+        </header>
+        <label>
+          <span>API 服务地址</span>
+          <input
+            autoFocus
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="http://127.0.0.1:8080 或 http://服务器公网 IP"
+            inputMode="url"
+          />
+        </label>
+        <p>开发时可使用本机地址；DMG 中填写部署后的公网地址。更换地址会退出当前服务的登录状态。</p>
+        {error ? <strong className="backend-settings-error">{error}</strong> : null}
+        <footer>
+          <button type="button" onClick={() => setUrl("http://127.0.0.1:8080")}>
+            使用本机开发服务
+          </button>
+          <button type="button" className="primary" onClick={() => void save()} disabled={saving}>
+            {saving ? "正在验证..." : "保存并连接"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [activePluginId, setActivePluginId] = useState<string>(savedPluginId);
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>("local");
@@ -257,6 +326,9 @@ function App() {
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [isAdminPage, setIsAdminPage] = useState(() => window.location.hash === "#/admin");
+  const [backendBaseUrl, setBackendBaseUrl] = useState(getApiBaseUrl);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [showBackendSettings, setShowBackendSettings] = useState(false);
 
   const visiblePlugins = plugins;
   const activePlugin = visiblePlugins.find((plugin) => plugin.id === activePluginId) ?? visiblePlugins[0];
@@ -269,8 +341,12 @@ function App() {
 
   useEffect(() => {
     void loadRuntimeSettings().then((settings) => {
-      if (settings.mode === "connected") {
-        void changeRuntimeMode("connected");
+      const configuredUrl = settings.apiBaseUrl || getApiBaseUrl();
+      setApiBaseUrl(configuredUrl);
+      setBackendBaseUrl(configuredUrl);
+      setSettingsLoaded(true);
+      if (settings.mode === "connected" && configuredUrl) {
+        void changeRuntimeMode("connected", configuredUrl);
       }
     });
   }, []);
@@ -296,6 +372,9 @@ function App() {
   }, [isAdminPage]);
 
   useEffect(() => {
+    if (!settingsLoaded || !backendBaseUrl) {
+      return;
+    }
     void loadSessionToken().then(async (token) => {
       if (!token) {
         return;
@@ -308,7 +387,7 @@ function App() {
         await saveSessionToken("");
       }
     });
-  }, []);
+  }, [backendBaseUrl, settingsLoaded]);
 
   async function handleAuthenticated(result: AuthResult) {
     setAccessToken(result.token);
@@ -336,34 +415,54 @@ function App() {
     window.location.hash = "/";
   }
 
-  async function changeRuntimeMode(mode: RuntimeMode) {
+  async function changeRuntimeMode(mode: RuntimeMode, targetBaseUrl = backendBaseUrl) {
     if (mode === "local") {
       setRuntimeMode("local");
       setServiceOnline(false);
       setCheckedAt("");
       setModeStatus("本地运行，不会连接服务");
-      await saveRuntimeSettings({ mode: "local" });
+      await saveRuntimeSettings({ mode: "local", apiBaseUrl: targetBaseUrl });
+      return;
+    }
+
+    if (!targetBaseUrl) {
+      setModeStatus("请先设置后端服务地址");
+      setShowBackendSettings(true);
       return;
     }
 
     setSwitchingMode(true);
     setModeStatus("正在验证服务连接...");
     try {
+      setApiBaseUrl(targetBaseUrl);
       const health = await fetchHealth();
       setRuntimeMode("connected");
       setServiceOnline(health.status === "ok");
       setCheckedAt(health.checkedAt);
       setModeStatus("服务已连接，数据按策略处理");
-      await saveRuntimeSettings({ mode: "connected" });
+      await saveRuntimeSettings({ mode: "connected", apiBaseUrl: targetBaseUrl });
     } catch {
       setRuntimeMode("local");
       setServiceOnline(false);
       setCheckedAt("");
       setModeStatus("服务不可用，已保持本地运行");
-      await saveRuntimeSettings({ mode: "local" });
+      await saveRuntimeSettings({ mode: "local", apiBaseUrl: targetBaseUrl });
     } finally {
       setSwitchingMode(false);
     }
+  }
+
+  async function saveBackendSettings(value: string) {
+    const targetBaseUrl = normalizeApiBaseUrl(value);
+    if (!targetBaseUrl) {
+      throw new Error("请填写后端服务地址");
+    }
+    setApiBaseUrl(targetBaseUrl);
+    setBackendBaseUrl(targetBaseUrl);
+    setAccessToken("");
+    await saveSessionToken("");
+    setAuth(null);
+    await changeRuntimeMode("connected", targetBaseUrl);
   }
 
   const content = isAdminPage ? (
@@ -442,7 +541,12 @@ function App() {
         </div>
 
         <div className="sidebar-footer">
-          <span>运行模式</span>
+          <div className="runtime-footer-head">
+            <span>运行模式</span>
+            <button type="button" onClick={() => setShowBackendSettings(true)} aria-label="配置后端服务地址">
+              <Settings2 size={14} aria-hidden="true" />
+            </button>
+          </div>
           <div className="runtime-mode-switch" role="group" aria-label="运行模式">
             <button
               className={runtimeMode === "local" ? "selected" : ""}
@@ -537,6 +641,13 @@ function App() {
             setShowCommandPalette(false);
           }}
           onOpenPlugin={setActivePluginId}
+        />
+      ) : null}
+      {showBackendSettings ? (
+        <BackendSettingsDialog
+          initialUrl={backendBaseUrl}
+          onSave={saveBackendSettings}
+          onClose={() => setShowBackendSettings(false)}
         />
       ) : null}
     </>

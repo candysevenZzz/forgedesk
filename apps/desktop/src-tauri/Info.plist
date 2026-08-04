@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    ForgeDesk runs its frontend inside WKWebView. The current production
+    deployment uses an HTTP endpoint addressed by a public IP, so a
+    domain-specific ATS exception cannot be used. Keep this exception scoped
+    to WebView traffic instead of disabling ATS for native network requests.
+  -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoadsInWebContent</key>
+    <true/>
+  </dict>
+</dict>
+</plist>

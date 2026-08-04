@@ -1,16 +1,18 @@
 package app.forgedesk.config;
 
-import java.util.List;
+import java.util.Arrays;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "forgedesk.web")
-public record ForgeDeskWebProperties(List<String> allowedOrigins) {
+public record ForgeDeskWebProperties(String allowedOrigins) {
 
   public String[] allowedOriginsArray() {
-    return allowedOrigins == null
-        ? new String[0]
-        : allowedOrigins.stream()
-            .filter(value -> value != null && !value.isBlank())
-            .toArray(String[]::new);
+    if (allowedOrigins == null || allowedOrigins.isBlank()) {
+      return new String[0];
+    }
+    return Arrays.stream(allowedOrigins.split(","))
+        .map(String::trim)
+        .filter(value -> !value.isEmpty())
+        .toArray(String[]::new);
   }
 }
