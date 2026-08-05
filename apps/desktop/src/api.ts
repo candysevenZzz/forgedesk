@@ -303,8 +303,12 @@ export type LandlordPlayer = {
   displayName: string;
   seat: number;
   ready: boolean;
+  bot: boolean;
+  avatarUrl: string;
   handCount: number;
   landlord: boolean;
+  remainingHand: string[];
+  settlementScore: number;
 };
 export type LandlordMove = {
   userId: string;
@@ -341,6 +345,14 @@ export function createLandlordRoom(): Promise<LandlordRoom> {
 
 export function joinLandlordRoom(roomId: string): Promise<LandlordRoom> {
   return jsonRequest<LandlordRoom>(`/api/landlord/rooms/${encodeURIComponent(roomId)}/join`, { method: "POST" }, true);
+}
+
+export function fillLandlordBots(roomId: string): Promise<LandlordRoom> {
+  return jsonRequest<LandlordRoom>(
+    `/api/landlord/rooms/${encodeURIComponent(roomId)}/fill-bots`,
+    { method: "POST" },
+    true,
+  );
 }
 
 export function fetchLandlordRoom(roomId: string): Promise<LandlordRoom> {

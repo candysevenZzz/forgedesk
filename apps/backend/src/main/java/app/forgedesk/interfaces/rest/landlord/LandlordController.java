@@ -37,6 +37,11 @@ public class LandlordController {
     return landlord.join(RequestIdentity.current().id(), roomId);
   }
 
+  @PostMapping("/rooms/{roomId}/fill-bots")
+  RoomView fillBots(@PathVariable String roomId) {
+    return landlord.fillBots(RequestIdentity.current().id(), roomId);
+  }
+
   @GetMapping("/rooms/{roomId}")
   RoomView room(@PathVariable String roomId) {
     return landlord.room(RequestIdentity.current().id(), roomId);

@@ -1889,33 +1889,63 @@ h2 {
 }
 .landlord-table {
   position: relative;
-  min-height: 440px;
+  min-height: 474px;
   overflow: hidden;
-  border: 1px solid rgba(213, 167, 86, 0.32);
-  border-radius: 7px;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(52, 127, 90, 0.36), transparent 47%),
-    linear-gradient(145deg, #172720, #0d1814 68%);
+  isolation: isolate;
+  border: 1px solid #7e6336;
+  border-radius: 10px;
+  background: #0c1712;
+  box-shadow:
+    inset 0 0 0 10px #16130f,
+    inset 0 0 0 12px rgba(238, 191, 101, 0.42),
+    0 18px 34px rgba(0, 0, 0, 0.2);
 }
 .landlord-table::before {
   position: absolute;
-  inset: 18px;
-  border: 1px solid rgba(244, 204, 127, 0.14);
-  border-radius: 50%;
+  z-index: 1;
+  inset: 28px 9%;
+  border: 1px solid rgba(244, 204, 127, 0.22);
+  border-radius: 48%;
   content: "";
   pointer-events: none;
 }
-.landlord-bottom-cards {
+.landlord-table::after {
   position: absolute;
   z-index: 1;
-  top: 20px;
+  inset: 38px 12%;
+  border: 1px solid rgba(244, 204, 127, 0.12);
+  border-radius: 46%;
+  content: "";
+  pointer-events: none;
+}
+.landlord-table-felt {
+  position: absolute;
+  z-index: 0;
+  inset: 12px;
+  border: 1px solid rgba(152, 200, 133, 0.17);
+  border-radius: 7px;
+  background-color: #173e30;
+  background-image: linear-gradient(rgba(219, 235, 177, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(219, 235, 177, 0.025) 1px, transparent 1px);
+  background-size: 12px 12px;
+  box-shadow: inset 0 0 58px rgba(0, 0, 0, 0.28);
+}
+.landlord-bottom-cards {
+  position: absolute;
+  z-index: 3;
+  top: 25px;
   left: 50%;
   display: flex;
   align-items: center;
   gap: 5px;
-  min-height: 30px;
+  min-height: 31px;
   transform: translateX(-50%);
   color: rgba(240, 245, 235, 0.6);
+  font-size: 10px;
+}
+.landlord-bottom-label {
+  margin-right: 3px;
+  color: rgba(240, 245, 235, 0.54);
   font-size: 10px;
 }
 .landlord-mini-card,
@@ -1933,120 +1963,232 @@ h2 {
 }
 .landlord-players {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   inset: 0;
 }
 .landlord-player {
   position: absolute;
   display: grid;
-  min-width: 116px;
-  justify-items: center;
-  gap: 3px;
-  padding: 8px 10px;
-  color: var(--muted);
-  border: 1px solid rgba(228, 239, 225, 0.18);
-  border-radius: 6px;
-  background: rgba(8, 19, 14, 0.76);
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  width: 174px;
+  gap: 8px;
+  padding: 6px 8px;
+  color: #ced9d0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(7, 17, 13, 0.66);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
 }
-.landlord-player > span {
+.landlord-seat-avatar {
+  position: relative;
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  color: var(--amber);
+  color: #f5cf83;
+  overflow: visible;
   border-radius: 50%;
-  background: rgba(245, 189, 103, 0.14);
+  background: #23382d;
+  box-shadow: 0 0 0 2px rgba(237, 242, 225, 0.15);
+}
+.landlord-seat-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.landlord-seat-avatar > span {
+  color: #f5cf83;
+  font-size: 14px;
+  font-weight: 700;
+}
+.landlord-crown {
+  position: absolute;
+  right: -7px;
+  bottom: -4px;
+  padding: 1px;
+  color: #38240a;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.landlord-turn-pulse {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #183e30;
+  border-radius: 50%;
+  background: #77d8a2;
+  box-shadow: 0 0 0 4px rgba(119, 216, 162, 0.16);
+  animation: landlord-turn-pulse 1.5s ease-in-out infinite;
+}
+.landlord-player-meta {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 .landlord-player strong {
-  color: #edf4e9;
+  overflow: hidden;
+  color: #f0f4ef;
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .landlord-player small {
-  color: #9aa99e;
+  color: #a9bab0;
   font-size: 10px;
 }
 .landlord-player.active {
-  border-color: var(--amber);
+  border-color: rgba(245, 189, 103, 0.76);
+  background: rgba(12, 31, 22, 0.86);
   box-shadow: 0 0 0 2px rgba(245, 189, 103, 0.16);
 }
 .landlord-player.seat-0 {
-  left: 50%;
-  bottom: 20px;
-  transform: translateX(-50%);
+  bottom: 18px;
+  left: 30px;
 }
 .landlord-player.seat-1 {
-  top: 50%;
-  left: 36px;
-  transform: translateY(-50%);
+  top: 86px;
+  left: 32px;
 }
 .landlord-player.seat-2 {
-  top: 50%;
-  right: 36px;
-  transform: translateY(-50%);
+  top: 86px;
+  right: 32px;
 }
-.landlord-last-play {
+.landlord-card-backs {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  height: 35px;
+  margin-top: -3px;
+  padding: 0 5px;
+}
+.landlord-card-backs > span {
+  display: block;
+  width: 20px;
+  height: 29px;
+  margin-left: -9px;
+  border: 1px solid rgba(239, 230, 210, 0.64);
+  border-radius: 3px;
+  background-color: #235f7d;
+  background-image: linear-gradient(45deg, rgba(240, 224, 183, 0.3) 25%, transparent 25%, transparent 75%, rgba(240, 224, 183, 0.3) 75%),
+    linear-gradient(45deg, rgba(240, 224, 183, 0.3) 25%, transparent 25%, transparent 75%, rgba(240, 224, 183, 0.3) 75%);
+  background-position: 0 0, 3px 3px;
+  background-size: 6px 6px;
+  box-shadow: 1px 2px 3px rgba(0, 0, 0, 0.25);
+  transform: rotate(calc((var(--card-index) - 3) * 2deg));
+}
+.landlord-card-backs > span:first-child {
+  margin-left: 0;
+}
+.landlord-card-backs em {
+  margin-left: 6px;
+  color: #cfd9d0;
+  font-size: 10px;
+  font-style: normal;
+}
+.landlord-seat-action {
   position: absolute;
-  z-index: 1;
-  top: 47%;
-  left: 50%;
+  z-index: 6;
   display: grid;
-  min-width: 180px;
-  justify-items: center;
-  gap: 7px;
-  transform: translate(-50%, -50%);
+  min-width: 46px;
+  min-height: 29px;
+  place-items: center;
+  padding: 5px;
+  border: 1px solid rgba(235, 242, 224, 0.18);
+  border-radius: 6px;
+  background: rgba(6, 19, 14, 0.76);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.18);
+  animation: landlord-play-arrival 280ms ease-out both;
 }
-.landlord-last-play > span {
-  color: #afbdad;
-  font-size: 11px;
+.landlord-player.seat-0 .landlord-seat-action {
+  bottom: calc(100% + 12px);
+  left: 50px;
 }
-.landlord-last-play > div {
+.landlord-player.seat-1 .landlord-seat-action {
+  top: calc(100% + 16px);
+  left: 72px;
+}
+.landlord-player.seat-2 .landlord-seat-action {
+  top: calc(100% + 16px);
+  right: 72px;
+}
+.landlord-seat-play-cards {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 3px;
 }
-.landlord-play-card {
+.landlord-seat-play-cards > span {
+  display: grid;
   min-width: 31px;
-  height: 42px;
+  height: 43px;
+  place-items: center;
+  color: #342c22;
+  border-radius: 3px;
+  background: #f4ead4;
+  box-shadow: 0 5px 9px rgba(0, 0, 0, 0.18);
+  font-family: "SF Mono", "Cascadia Code", monospace;
   font-size: 13px;
+  font-weight: 700;
 }
-.landlord-moves {
-  position: absolute;
-  z-index: 1;
-  right: 15px;
-  bottom: 13px;
-  width: 175px;
-  padding: 8px;
-  border: 1px solid rgba(228, 239, 225, 0.12);
-  border-radius: 5px;
-  background: rgba(8, 19, 14, 0.7);
-}
-.landlord-moves p {
-  margin: 2px 0;
-  color: #9cae9e;
-  font-size: 10px;
-  line-height: 1.45;
-}
-.landlord-moves strong {
-  margin-right: 4px;
-  color: #d9e5d8;
-  font-weight: 600;
+.landlord-pass-copy {
+  padding: 2px 5px;
+  color: #f1d0c3;
+  border: 1px solid rgba(246, 139, 125, 0.4);
+  border-radius: 4px;
+  background: rgba(114, 35, 31, 0.22);
+  font-size: 11px;
+  font-weight: 700;
 }
 .landlord-hand {
   display: flex;
   align-items: end;
-  min-height: 114px;
-  padding: 16px 20px 4px;
+  min-height: 122px;
+  padding: 18px 24px 7px;
   overflow-x: auto;
+}
+.landlord-self-hand {
+  position: absolute;
+  z-index: 5;
+  bottom: 12px;
+  left: 50%;
+  width: min(66%, 680px);
+  min-height: 110px;
+  padding: 18px 10px 4px;
+  transform: translateX(-50%);
+  border-top: 1px solid rgba(243, 208, 139, 0.18);
+  overflow: visible;
+}
+.landlord-self-hand-label {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  color: rgba(238, 244, 231, 0.56);
+  font-size: 10px;
+  transform: translateX(-50%);
+}
+.landlord-self-hand-cards {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  min-width: max-content;
+  margin: 0 auto;
 }
 .landlord-card {
   display: grid;
-  width: 52px;
-  height: 76px;
-  flex: 0 0 52px;
+  width: 58px;
+  height: 84px;
+  flex: 0 0 58px;
   align-content: space-between;
   justify-items: start;
-  margin-left: -15px;
+  margin-left: -18px;
   padding: 7px 8px;
   color: #1d2731;
   border: 1px solid #c7bda9;
@@ -2061,10 +2203,16 @@ h2 {
   margin-left: 0;
 }
 .landlord-card:hover {
-  transform: translateY(-8px);
+  transform: translateY(-10px);
+}
+.landlord-card:disabled {
+  cursor: default;
+}
+.landlord-card:disabled:hover {
+  transform: none;
 }
 .landlord-card.selected {
-  transform: translateY(-14px);
+  transform: translateY(-18px);
   border-color: var(--amber);
   box-shadow: 0 0 0 2px rgba(245, 189, 103, 0.35);
 }
@@ -2072,10 +2220,18 @@ h2 {
   font-size: 16px;
   line-height: 1;
 }
+.landlord-card.joker strong {
+  font-size: 13px;
+  letter-spacing: 0;
+}
 .landlord-card span {
   justify-self: end;
   font-size: 20px;
   line-height: 1;
+}
+.landlord-card.joker span {
+  font-size: 14px;
+  font-weight: 700;
 }
 .landlord-card.red {
   color: #c34d47;
@@ -2091,6 +2247,342 @@ h2 {
 }
 .landlord-finished {
   padding: 12px 0;
+}
+.landlord-settlement {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.landlord-settlement-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 10, 8, 0.76);
+  backdrop-filter: blur(7px);
+}
+.landlord-settlement-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 520px);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  color: #eaf1e8;
+  border: 1px solid rgba(238, 191, 101, 0.58);
+  border-radius: 8px;
+  background: #112219;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+.landlord-settlement-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 19px 20px 16px;
+  border-bottom: 1px solid rgba(233, 242, 222, 0.11);
+  background: linear-gradient(135deg, rgba(117, 82, 24, 0.34), rgba(17, 34, 25, 0));
+}
+.landlord-settlement-medal {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #4b3008;
+  border-radius: 50%;
+  background: #f4c777;
+  box-shadow: 0 0 0 5px rgba(244, 199, 119, 0.11);
+}
+.landlord-settlement-head > div {
+  display: grid;
+  gap: 2px;
+}
+.landlord-settlement-head span,
+.landlord-winner-card span,
+.landlord-settlement-section-title small,
+.landlord-winner-card small,
+.landlord-loser-card small {
+  color: #afc1b6;
+  font-size: 11px;
+}
+.landlord-settlement-head h2 {
+  margin: 0;
+  color: #f4f0e7;
+  font-size: 20px;
+  line-height: 1.2;
+}
+.landlord-settlement-head > strong {
+  color: #e9cf9b;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+.landlord-winner-card {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 20px;
+  padding: 13px;
+  border: 1px solid rgba(244, 199, 119, 0.46);
+  border-radius: 7px;
+  background: rgba(109, 78, 27, 0.2);
+}
+.landlord-settlement-avatar {
+  position: relative;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  overflow: hidden;
+  color: #f7d68d;
+  border: 1px solid rgba(244, 199, 119, 0.42);
+  border-radius: 50%;
+  background: #254033;
+}
+.landlord-settlement-avatar.small {
+  width: 36px;
+  height: 36px;
+  color: #bfd0c4;
+  border-color: rgba(229, 239, 221, 0.16);
+}
+.landlord-settlement-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.landlord-settlement-avatar > svg:last-child {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  padding: 2px;
+  color: #3b2708;
+  border-radius: 50%;
+  background: #f4c777;
+}
+.landlord-winner-card > div:nth-child(2),
+.landlord-loser-meta {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.landlord-winner-card strong,
+.landlord-loser-card strong {
+  overflow: hidden;
+  color: #f4f0e7;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.landlord-winner-card b,
+.landlord-loser-card > b {
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 18px;
+}
+.landlord-winner-card b.positive,
+.landlord-loser-card > b.positive {
+  color: #8fd7a7;
+}
+.landlord-winner-card b.negative,
+.landlord-loser-card > b.negative {
+  color: #ef9388;
+}
+.landlord-settlement-loser-list {
+  display: grid;
+  gap: 7px;
+  padding: 0 20px;
+}
+.landlord-settlement-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 1px;
+  color: #dce6dc;
+  font-size: 12px;
+  font-weight: 600;
+}
+.landlord-loser-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid rgba(229, 239, 221, 0.1);
+  border-radius: 6px;
+  background: rgba(5, 16, 11, 0.34);
+}
+.landlord-loser-card > b {
+  font-size: 14px;
+}
+.landlord-loser-card > button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  gap: 3px;
+  padding: 0 6px;
+  color: #d9e6db;
+  border: 1px solid rgba(229, 239, 221, 0.18);
+  border-radius: 4px;
+  background: rgba(234, 242, 227, 0.06);
+  font-size: 11px;
+}
+.landlord-loser-card > button:hover {
+  border-color: rgba(244, 199, 119, 0.5);
+  color: #f7dca3;
+  background: rgba(244, 199, 119, 0.12);
+}
+.landlord-revealed-hand {
+  display: flex;
+  grid-column: 1 / -1;
+  min-height: 49px;
+  align-items: center;
+  padding: 8px 3px 2px;
+  overflow-x: auto;
+  border-top: 1px solid rgba(229, 239, 221, 0.1);
+}
+.landlord-revealed-hand > span {
+  display: grid;
+  width: 34px;
+  height: 45px;
+  flex: 0 0 34px;
+  align-content: space-between;
+  justify-items: start;
+  margin-left: -9px;
+  padding: 4px 5px;
+  color: #202a2e;
+  border: 1px solid #cfc5b3;
+  border-radius: 3px;
+  background: #f6f1e6;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+}
+.landlord-revealed-hand > span:first-child {
+  margin-left: 0;
+}
+.landlord-revealed-hand > span.red {
+  color: #c34d47;
+}
+.landlord-revealed-hand > span strong {
+  font-size: 13px;
+  line-height: 1;
+}
+.landlord-revealed-hand > span small {
+  justify-self: end;
+  color: currentColor;
+  font-size: 12px;
+  line-height: 1;
+}
+.landlord-revealed-hand > small {
+  color: #aebfb4;
+  font-size: 11px;
+}
+.landlord-settlement-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(233, 242, 222, 0.11);
+  background: rgba(5, 14, 10, 0.36);
+}
+.landlord-settlement-actions button {
+  min-height: 34px;
+}
+@keyframes landlord-turn-pulse {
+  50% {
+    box-shadow: 0 0 0 7px rgba(119, 216, 162, 0.05);
+  }
+}
+@keyframes landlord-play-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (max-width: 720px) {
+  .landlord-table {
+    min-height: 430px;
+  }
+  .landlord-player {
+    width: 132px;
+    gap: 6px;
+    padding: 5px;
+  }
+  .landlord-player.seat-1 {
+    top: 78px;
+    left: 13px;
+  }
+  .landlord-player.seat-2 {
+    top: 78px;
+    right: 13px;
+  }
+  .landlord-card-backs > span:nth-child(n + 6) {
+    display: none;
+  }
+  .landlord-table::before {
+    inset: 28px 5%;
+  }
+  .landlord-table::after {
+    inset: 38px 8%;
+  }
+  .landlord-hand {
+    padding-inline: 8px;
+  }
+  .landlord-self-hand {
+    width: calc(100% - 178px);
+    min-height: 96px;
+    padding-top: 14px;
+  }
+  .landlord-player.seat-0 {
+    bottom: 12px;
+    left: 12px;
+  }
+  .landlord-player.seat-0 .landlord-seat-action {
+    left: 42px;
+  }
+  .landlord-player.seat-1 .landlord-seat-action {
+    left: 55px;
+  }
+  .landlord-player.seat-2 .landlord-seat-action {
+    right: 55px;
+  }
+  .landlord-card {
+    width: 48px;
+    height: 72px;
+    flex-basis: 48px;
+    margin-left: -16px;
+  }
+  .landlord-settlement {
+    padding: 12px;
+  }
+  .landlord-settlement-panel {
+    max-height: calc(100vh - 24px);
+  }
+  .landlord-settlement-head,
+  .landlord-winner-card {
+    margin-inline: 12px;
+  }
+  .landlord-settlement-head {
+    margin: 0;
+    padding-inline: 14px;
+  }
+  .landlord-settlement-loser-list {
+    padding-inline: 12px;
+  }
+  .landlord-settlement-actions {
+    padding-inline: 12px;
+  }
+  .landlord-loser-card {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+  .landlord-loser-card > button {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
 }
 
 .canvas-game {

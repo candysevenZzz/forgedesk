@@ -37,6 +37,8 @@ public class LandlordRoomState {
     private String displayName;
     private int seat;
     private boolean ready;
+    private boolean bot;
+    private String avatarUrl = "";
     private List<String> hand = new ArrayList<>();
   }
 
